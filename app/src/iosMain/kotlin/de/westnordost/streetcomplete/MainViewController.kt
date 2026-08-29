@@ -23,7 +23,9 @@ fun MainViewController(): UIViewController {
     val viewController = ComposeUIViewController {
         ApplySelectedTheme()
         AppTheme {
-            IosApp()
+            WithBuildStamp {
+                IosApp()
+            }
         }
     }
     /* also here and not only in ApplySelectedTheme, because that only runs once there is a
