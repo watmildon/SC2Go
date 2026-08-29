@@ -58,6 +58,8 @@ buildkonfig {
     defaultConfigs {
         buildConfigField(STRING, "VERSION_NAME", appVersionName)
         buildConfigField(BOOLEAN, "DEBUG", properties["app.streetcomplete.debug"]!!.toString())
+        // overridden per target below; declared here so that common code can read it at all
+        buildConfigField(STRING, "PLATFORM", "unknown")
     }
 
     targetConfigs {
