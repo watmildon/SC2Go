@@ -110,7 +110,9 @@ fun IosMainScreen() {
     }
 
     val shownBottomSheet by mainBottomSheetViewModel.shownBottomSheet.collectAsState()
+    val isShowingUndoHistory by editHistoryViewModel.isShowingSidebar.collectAsState()
     var shownMarkers by remember { mutableStateOf<Collection<MapMarker>?>(null) }
+    var lastQuestSolved by remember { mutableStateOf<QuestSolvedEvent?>(null) }
     // the screens that are their own Activity on Android are shown on top of the map here
     var shownScreen by remember { mutableStateOf<FullScreen?>(null) }
 
@@ -129,12 +131,12 @@ fun IosMainScreen() {
                 }
             },
             onClickQuest = { questKey -> mainBottomSheetViewModel.showQuest(questKey) },
-            onClickEdit = { /* undo history sidebar is not wired up yet */ },
+            onClickEdit = { editKey -> editHistoryViewModel.select(editKey) },
             location = null,
             rotation = null,
             shownBottomSheet = shownBottomSheet,
             shownMarkers = shownMarkers,
-            isShowingUndoHistorySidebar = false,
+            isShowingUndoHistorySidebar = isShowingUndoHistory,
             cameraState = cameraState,
             modifier = Modifier.fillMaxSize(),
         )
@@ -172,9 +174,16 @@ fun IosMainScreen() {
             onClickProfile = { shownScreen = FullScreen.Profile },
             onClickLogin = { shownScreen = FullScreen.Login },
             onSetMapMarkers = { markers -> shownMarkers = markers.map { it.toMapMarker() } },
-            onSolvedQuest = { _, _ -> },
+            onSolvedQuest = { icon, position ->
+                // where on screen it was, so that it can fly from there to the star
+                cameraState.screenOffsetOf(position, density)?.let {
+                    lastQuestSolved = QuestSolvedEvent(icon, it)
+                }
+            },
             getOffset = { position -> cameraState.screenOffsetOf(position, density) },
         )
+
+        lastQuestSolved?.let { LastQuestSolvedEffect(it) }
 
         val goBack = { shownScreen = null }
         when (shownScreen) {
