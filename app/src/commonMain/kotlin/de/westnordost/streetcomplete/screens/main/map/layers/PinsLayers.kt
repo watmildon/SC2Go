@@ -2,6 +2,7 @@ package de.westnordost.streetcomplete.screens.main.map.layers
 
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.DpOffset
@@ -10,6 +11,8 @@ import androidx.compose.ui.unit.em
 import de.westnordost.streetcomplete.data.osm.mapdata.LatLon
 import de.westnordost.streetcomplete.resources.Res
 import de.westnordost.streetcomplete.resources.map_pin_circle
+import de.westnordost.streetcomplete.resources.quest_create_note
+import de.westnordost.streetcomplete.screens.main.map.pinPainter
 import de.westnordost.streetcomplete.screens.main.map.toGeometry
 import de.westnordost.streetcomplete.ui.ktx.id
 import kotlinx.coroutines.launch
@@ -21,6 +24,7 @@ import org.jetbrains.compose.resources.DrawableResource
 import org.jetbrains.compose.resources.painterResource
 import org.maplibre.compose.expressions.dsl.all
 import org.maplibre.compose.expressions.dsl.any
+import org.maplibre.compose.expressions.dsl.case
 import org.maplibre.compose.expressions.dsl.const
 import org.maplibre.compose.expressions.dsl.convertToNumber
 import org.maplibre.compose.expressions.dsl.convertToString
@@ -34,6 +38,7 @@ import org.maplibre.compose.expressions.dsl.lte
 import org.maplibre.compose.expressions.dsl.offset
 import org.maplibre.compose.expressions.dsl.plus
 import org.maplibre.compose.expressions.dsl.sp
+import org.maplibre.compose.expressions.dsl.switch
 import org.maplibre.compose.expressions.dsl.zoom
 import org.maplibre.compose.expressions.value.TranslateAnchor
 import org.maplibre.compose.layers.CircleLayer
@@ -54,6 +59,8 @@ fun PinsLayers(
     onZoomToCluster: (targetZoom: Double) -> Unit,
 ) {
     val coroutineScope = rememberCoroutineScope()
+
+    val pinIcons = remember(pins) { pins.map { it.icon }.distinct() }
 
     val source = rememberGeoJsonSource(
         data = GeoJsonData.Features(FeatureCollection(pins.map { it.toGeoJsonFeature() })),
@@ -124,7 +131,19 @@ fun PinsLayers(
         minZoom = CLUSTER_MAX_ZOOM.toFloat(),
         filter = zoom() gt const(CLUSTER_MAX_ZOOM),
         sortKey = feature["icon-order"].convertToNumber(),
-        iconImage = image(feature["icon-image"].convertToString()),
+        /* Ideally this would just be image(feature["icon-image"]), i.e. refer to the pin image by
+           name. That only works for images already defined in the style JSON, though, and
+           MapLibre-Compose exposes no API to add images to the style under a given name - see
+           https://github.com/maplibre/maplibre-compose/issues/468 and #18.
+           So instead, declare every pin icon that is currently displayed as its own case, which
+           is what makes MapLibre-Compose load them. */
+        iconImage = switch(
+            feature["icon-image"].convertToString(),
+            *pinIcons.map { icon ->
+                case("pin_" + icon.id, image(pinPainter(painterResource(icon))))
+            }.toTypedArray(),
+            fallback = image(pinPainter(painterResource(Res.drawable.quest_create_note))),
+        ),
         // constant icon size because click area would become a bit too small and more
         // importantly, dynamic size per zoom + collision doesn't work together well, it
         // results in a lot of flickering.
