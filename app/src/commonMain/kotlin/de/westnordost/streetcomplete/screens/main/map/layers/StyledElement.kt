@@ -170,6 +170,10 @@ private fun getLineWidth(tags: Map<String, String>): Float = when (tags["highway
 private fun isBridge(tags: Map<String, String>): Boolean =
     tags["bridge"] != null && tags["bridge"] != "no"
 
+/** All the icons displayed for these elements, i.e. those that must be loaded into the style */
+fun Iterable<StyledElement>.overlayIcons(): List<DrawableResource> =
+    mapNotNull { it.style.getIcon() }.distinct()
+
 private fun OverlayStyle.getIcon(): DrawableResource? = when (this) {
     is OverlayStyle.Point -> icon
     is OverlayStyle.Polygon -> icon

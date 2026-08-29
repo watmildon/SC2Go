@@ -5,6 +5,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.intl.Locale
@@ -24,6 +25,7 @@ import de.westnordost.streetcomplete.screens.main.map.layers.SelectedPinsLayer
 import de.westnordost.streetcomplete.screens.main.map.layers.StyleableOverlayLabelLayer
 import de.westnordost.streetcomplete.screens.main.map.layers.StyleableOverlayLayers
 import de.westnordost.streetcomplete.screens.main.map.layers.StyleableOverlaySideLayer
+import de.westnordost.streetcomplete.screens.main.map.layers.overlayIcons
 import de.westnordost.streetcomplete.screens.main.map.layers.toGeoJsonFeatures
 import kotlinx.coroutines.launch
 import org.koin.compose.viewmodel.koinViewModel
@@ -109,6 +111,8 @@ fun MainMap(
         val languages = listOf(Locale.current.language)
         val colors = if (isSystemInDarkTheme()) MapColors.Night else MapColors.Light
 
+        val overlayIcons = remember(styledElements) { styledElements.overlayIcons() }
+
         val overlaySource = rememberGeoJsonSource(
             GeoJsonData.Features(FeatureCollection(styledElements.flatMap { it.toGeoJsonFeatures() })),
         )
@@ -152,6 +156,7 @@ fun MainMap(
                 if (showOverlay) {
                     StyleableOverlayLabelLayer(
                         source = overlaySource,
+                        icons = overlayIcons,
                         color = colors.text,
                         haloColor = colors.textOutline,
                         onClickElement = { properties ->

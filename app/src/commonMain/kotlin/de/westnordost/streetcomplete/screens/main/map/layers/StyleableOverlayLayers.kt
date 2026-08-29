@@ -1,6 +1,9 @@
 package de.westnordost.streetcomplete.screens.main.map.layers
 
 import androidx.compose.runtime.Composable
+import org.jetbrains.compose.resources.DrawableResource
+import org.jetbrains.compose.resources.painterResource
+import de.westnordost.streetcomplete.ui.ktx.id
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
@@ -15,6 +18,7 @@ import kotlinx.serialization.json.JsonObject
 import org.maplibre.compose.expressions.dsl.all
 import org.maplibre.compose.expressions.dsl.asNumber
 import org.maplibre.compose.expressions.dsl.condition
+import org.maplibre.compose.expressions.dsl.case
 import org.maplibre.compose.expressions.dsl.const
 import org.maplibre.compose.expressions.dsl.convertToBoolean
 import org.maplibre.compose.expressions.dsl.convertToColor
@@ -46,6 +50,7 @@ import org.maplibre.spatialk.geojson.Geometry
 @Composable
 fun StyleableOverlayLabelLayer(
     source: Source,
+    icons: Collection<DrawableResource>,
     color: Color,
     haloColor: Color,
     onClickElement: (properties: JsonObject) -> Unit,
@@ -56,7 +61,18 @@ fun StyleableOverlayLabelLayer(
         minZoom = 17f,
         filter = feature.isPoint(),
         zOrder = const(SymbolZOrder.Source),
-        iconImage = image(feature["icon"].convertToString()),
+        /* same as for the pins: images can only be referred to by name if they are already in
+           the style, so each displayed icon must be declared as its own case to get it loaded.
+           See https://github.com/maplibre/maplibre-compose/issues/468 */
+        iconImage = switch(
+            feature["icon"].convertToString(),
+            *icons.map { icon ->
+                // drawn as SDF because these icons are tinted with iconColor
+                case(icon.id.orEmpty(), image(painterResource(icon), drawAsSdf = true))
+            }.toTypedArray(),
+            // elements without an icon: resolves to no image, same as before
+            fallback = image(feature["icon"].convertToString()),
+        ),
         iconSize = byZoom(17 to 0.5f, 19 to 1f),
         iconColor = const(color),
         iconHaloColor = const(haloColor),
