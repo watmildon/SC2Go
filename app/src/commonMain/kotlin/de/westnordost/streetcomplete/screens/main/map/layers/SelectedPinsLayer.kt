@@ -11,14 +11,13 @@ import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
 import de.westnordost.streetcomplete.data.osm.mapdata.LatLon
 import de.westnordost.streetcomplete.screens.main.map.toGeometry
-import de.westnordost.streetcomplete.ui.ktx.id
 import org.maplibre.spatialk.geojson.Feature
 import org.maplibre.spatialk.geojson.FeatureCollection
-import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.JsonObject
+import de.westnordost.streetcomplete.screens.main.map.pinPainter
 import org.jetbrains.compose.resources.DrawableResource
+import org.jetbrains.compose.resources.painterResource
 import org.maplibre.compose.expressions.dsl.const
-import org.maplibre.compose.expressions.dsl.convertToString
-import org.maplibre.compose.expressions.dsl.feature
 import org.maplibre.compose.expressions.dsl.image
 import org.maplibre.compose.layers.SymbolLayer
 import org.maplibre.compose.sources.GeoJsonData
@@ -44,10 +43,8 @@ fun SelectedPinsLayer(icon: DrawableResource, pinPositions: Collection<LatLon>) 
     val source = rememberGeoJsonSource(
         data = GeoJsonData.Features(
             FeatureCollection(pinPositions.map {
-                Feature(
-                    geometry = it.toGeometry(),
-                    properties = mapOf("icon-image" to JsonPrimitive("pin_" + icon.id))
-                )
+                // must be a JsonObject and not just any Map, or serializing the source throws
+                Feature(geometry = it.toGeometry(), properties = JsonObject(emptyMap()))
             })
         ),
     )
@@ -55,7 +52,7 @@ fun SelectedPinsLayer(icon: DrawableResource, pinPositions: Collection<LatLon>) 
     SymbolLayer(
         id = "selected-pins-layer",
         source = source,
-        iconImage = image(feature["icon-image"].convertToString()),
+        iconImage = image(pinPainter(painterResource(icon))),
         iconSize = const(pinsSize.value),
         iconPadding = const(DpPadding(
             left = 2.5.dp,
