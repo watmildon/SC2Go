@@ -13,7 +13,6 @@ import de.westnordost.streetcomplete.resources.map_pin_circle
 import de.westnordost.streetcomplete.screens.main.map.toGeometry
 import de.westnordost.streetcomplete.ui.ktx.id
 import kotlinx.coroutines.launch
-import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import org.maplibre.spatialk.geojson.Feature
 import org.maplibre.spatialk.geojson.FeatureCollection
@@ -158,10 +157,13 @@ data class Pin(
 private fun Pin.toGeoJsonFeature() =
     Feature(
         geometry = position.toGeometry(),
-        properties =
+        /* must be a JsonObject and not just any Map: the GeoJSON serializer looks up the
+           serializer by the runtime class, and a plain Map has none registered */
+        properties = JsonObject(
             mapOf(
                 "icon-image" to JsonPrimitive("pin_" + icon.id),
                 "icon-order" to JsonPrimitive(order + 50),
             )
-            + (properties as Map<String, JsonElement>)
+            + (properties ?: emptyMap())
+        )
     )
