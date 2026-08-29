@@ -19,6 +19,13 @@ import de.westnordost.streetcomplete.data.osm.mapdata.BoundingBox
 import de.westnordost.streetcomplete.data.osm.mapdata.LatLon
 import de.westnordost.streetcomplete.data.preferences.Preferences
 import de.westnordost.streetcomplete.data.quest.AutoSyncer
+import kotlinx.coroutines.flow.first
+import org.maplibre.compose.location.LocationAccuracy
+import org.maplibre.compose.location.LocationEvent
+import org.maplibre.compose.location.LocationProvider
+import org.maplibre.compose.location.LocationRequest
+import org.maplibre.spatialk.units.extensions.meters
+import kotlin.time.Duration.Companion.seconds
 import de.westnordost.streetcomplete.screens.main.map.toBoundingBox
 import de.westnordost.streetcomplete.screens.main.map.toLatLon
 import de.westnordost.streetcomplete.util.logs.Log
@@ -61,6 +68,7 @@ fun IosMainScreen() {
     /* uploads edits as they are made and downloads around the user's location, the same way
        MainActivity hooks it into its lifecycle on Android */
     val autoSyncer: AutoSyncer = koinInject()
+    val locationProvider: LocationProvider = koinInject()
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner, autoSyncer) {
         lifecycleOwner.lifecycle.addObserver(autoSyncer)
@@ -140,7 +148,20 @@ fun IosMainScreen() {
             onClickCompass = {
                 scope.launch { cameraState.animateTo(cameraState.position.copy(bearing = 0.0, tilt = 0.0)) }
             },
-            onClickLocation = { /* following the user's location is not wired up yet */ },
+            onClickLocation = {
+                scope.launch {
+                    val request = LocationRequest(LocationAccuracy.High, 30.seconds, 100.meters)
+                    val fix = locationProvider.updates(request)
+                        .first { it is LocationEvent.Fix } as LocationEvent.Fix
+                    val (position, _) = fix.location.position
+                    cameraState.animateTo(
+                        cameraState.position.copy(
+                            target = position,
+                            zoom = maxOf(cameraState.position.zoom, 17.0),
+                        )
+                    )
+                }
+            },
             onClickLocationPointer = { },
             onClickCreate = { mainBottomSheetViewModel.showCreateNote(null) },
             onClickStopTrackRecording = { },
