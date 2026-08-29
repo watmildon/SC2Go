@@ -160,11 +160,19 @@ class MapDataControllerImpl constructor(
     // this is used after downloading one tile with auto-download, so we should always have it cached
     override fun getElementCounts(bbox: BoundingBox): MapDataSource.ElementCounts {
         val data = getMapDataWithGeometry(bbox)
-        return MapDataSource.ElementCounts(
-            data.count { it is Node },
-            data.count { it is Way },
-            data.count { it is Relation }
-        )
+        /* In one pass, and not three count {} calls: iterating the same map data a second time
+           segfaults on Kotlin/Native. Counting everything at once is also simply less work. */
+        var nodes = 0
+        var ways = 0
+        var relations = 0
+        for (element in data) {
+            when (element) {
+                is Node -> nodes++
+                is Way -> ways++
+                is Relation -> relations++
+            }
+        }
+        return MapDataSource.ElementCounts(nodes, ways, relations)
     }
 
     override fun getNode(id: Long): Node? =
