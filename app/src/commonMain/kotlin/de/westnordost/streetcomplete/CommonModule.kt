@@ -240,7 +240,9 @@ val commonModule = module {
             gzip()
             // deflate is broken in KTOR, see https://youtrack.jetbrains.com/issue/KTOR-6999/Deflate-ContentEncoder-incorrectly-uses-raw-DEFLATE
             // deflate()
-            identity()
+            /* not identity(): KTOR then sends "Accept-Encoding: gzip,identity" without a space,
+               which the OSM test API answers with 406. Identity is acceptable by default anyway
+               unless it is explicitly refused, so there is nothing to gain from listing it. */
         }
     } }
     single<Res> { Res }
