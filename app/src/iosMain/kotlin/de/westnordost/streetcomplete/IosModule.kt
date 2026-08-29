@@ -12,6 +12,8 @@ import de.westnordost.streetcomplete.data.connection.IosActiveNetworkConnection
 import de.westnordost.streetcomplete.data.download.DownloadController
 import de.westnordost.streetcomplete.data.download.Downloader
 import de.westnordost.streetcomplete.data.download.IosDownloadController
+import de.westnordost.streetcomplete.data.maptiles.IosMapTilesDownloader
+import de.westnordost.streetcomplete.data.maptiles.MapTilesDownloader
 import de.westnordost.streetcomplete.screens.about.AppStoreInfo
 import de.westnordost.streetcomplete.screens.about.IosAppStoreInfo
 import de.westnordost.streetcomplete.data.initialize
@@ -134,6 +136,10 @@ val iosModule = module {
     // connection
 
     factory<ActiveNetworkConnection> { IosActiveNetworkConnection() }
+
+    // map tiles
+
+    factory<MapTilesDownloader> { IosMapTilesDownloader() }
 
     // background jobs
 

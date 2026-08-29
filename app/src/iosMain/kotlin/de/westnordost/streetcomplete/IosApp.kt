@@ -18,11 +18,12 @@ import androidx.compose.ui.Modifier
 import de.westnordost.streetcomplete.screens.about.ChangelogScreen
 import de.westnordost.streetcomplete.screens.about.CreditsScreen
 import de.westnordost.streetcomplete.screens.about.PrivacyStatementScreen
+import de.westnordost.streetcomplete.screens.main.IosMainScreen
 import de.westnordost.streetcomplete.screens.settings.debug.ShowMapScreen
 import org.koin.compose.viewmodel.koinViewModel
 import platform.Foundation.NSUserDefaults
 
-private enum class Screen { Changelog, Credits, PrivacyStatement, ShowMap }
+private enum class Screen { Changelog, Credits, PrivacyStatement, ShowMap, Main }
 
 /** Allows opening a screen directly for development, e.g.
  *  xcrun simctl launch booted <bundle id> -screen Changelog */
@@ -53,6 +54,7 @@ fun IosApp() {
             Screen.ShowMap -> ShowMapScreen(
                 onClickBack = { screen = null },
             )
+            Screen.Main -> IosMainScreen()
         }
     }
 }
