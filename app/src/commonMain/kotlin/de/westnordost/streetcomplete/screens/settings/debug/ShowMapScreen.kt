@@ -32,9 +32,7 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import org.maplibre.compose.camera.CameraPosition
 import org.maplibre.compose.camera.rememberCameraState
-import org.maplibre.compose.map.MapOptions
 import org.maplibre.compose.map.MaplibreMap
-import org.maplibre.compose.map.OrnamentOptions
 import org.maplibre.compose.style.BaseStyle
 import org.maplibre.spatialk.geojson.Position
 
@@ -61,7 +59,6 @@ fun ShowMapScreen(
             baseStyle = BaseStyle.Json(BASE_STYLE),
             zoomRange = 0f..22f,
             cameraState = cameraState,
-            options = MapOptions(ornamentOptions = OrnamentOptions.AllDisabled),
         ) {
             MapStyle(
                 colors = if (isSystemInDarkTheme()) MapColors.Night else MapColors.Light,

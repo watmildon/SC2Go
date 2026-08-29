@@ -3,7 +3,7 @@ package de.westnordost.streetcomplete.screens.main.map.layers
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
-import androidx.compose.foundation.layout.PaddingValues
+import org.maplibre.compose.util.DpPadding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
@@ -57,7 +57,7 @@ fun SelectedPinsLayer(icon: DrawableResource, pinPositions: Collection<LatLon>) 
         source = source,
         iconImage = image(feature["icon-image"].convertToString()),
         iconSize = const(pinsSize.value),
-        iconPadding = const(PaddingValues.Absolute(
+        iconPadding = const(DpPadding(
             left = 2.5.dp,
             top = -2.5.dp,
             right = 0.dp,
