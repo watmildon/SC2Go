@@ -33,6 +33,7 @@ import org.maplibre.compose.camera.CameraPosition
 import org.maplibre.compose.camera.CameraState
 import org.maplibre.compose.camera.rememberCameraState
 import org.maplibre.compose.map.MaplibreMap
+import org.maplibre.compose.overlay.MapOverlay
 import org.maplibre.compose.sources.GeoJsonData
 import org.maplibre.compose.sources.rememberGeoJsonSource
 import org.maplibre.compose.style.BaseStyle
@@ -105,6 +106,8 @@ fun MainMap(
         baseStyle = BaseStyle.Json(BASE_STYLE),
         zoomRange = 0f..22f,
         cameraState = cameraState,
+        // StreetComplete draws its own attribution
+        overlay = MapOverlay.None,
         styleState = styleState,
         onMapLongClick = onMapLongClick,
     ) {
