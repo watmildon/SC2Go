@@ -127,7 +127,7 @@ object ApplicationConstants {
     locally before an upload etc) and that test API has a separate database that is mostly empty
     (test data needs to be created there).
      */
-    const val USE_TEST_API = false
+    const val USE_TEST_API = true
 
     const val MAX_OSM_TAG_VALUE_LENGTH = 255
 }
