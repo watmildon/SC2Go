@@ -22,6 +22,7 @@ val iosAppModule = module {
 fun initKoin() {
     startKoin {
         modules(
+            commonModule,
             iosModule,
             iosAppModule,
         )
