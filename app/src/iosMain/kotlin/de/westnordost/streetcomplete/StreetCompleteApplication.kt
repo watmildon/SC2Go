@@ -12,12 +12,12 @@ import de.westnordost.streetcomplete.util.ktx.nowAsEpochMilliseconds
 import de.westnordost.streetcomplete.util.logs.DatabaseLogger
 import de.westnordost.streetcomplete.util.logs.KermitLogger
 import de.westnordost.streetcomplete.util.logs.Log
+import kotlin.experimental.ExperimentalNativeApi
+import kotlin.native.setUnhandledExceptionHook
 import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineName
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
-import kotlin.experimental.ExperimentalNativeApi
-import kotlin.native.setUnhandledExceptionHook
 import kotlinx.coroutines.launch
 import platform.Foundation.NSNotificationCenter
 import platform.UIKit.UIApplicationDidReceiveMemoryWarningNotification

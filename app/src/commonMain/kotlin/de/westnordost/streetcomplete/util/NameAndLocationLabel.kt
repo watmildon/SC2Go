@@ -25,7 +25,7 @@ import de.westnordost.streetcomplete.util.ktx.getFeature
 import de.westnordost.streetcomplete.util.locale.getLanguagesForFeatureDictionary
 import org.jetbrains.compose.resources.ResourceEnvironment
 import org.jetbrains.compose.resources.getString
-import org.jetbrains.compose.resources.getSystemResourceEnvironment
+import org.jetbrains.compose.resources.rememberResourceEnvironment
 
 @Composable
 fun nameAndLocationLabel(
@@ -33,11 +33,8 @@ fun nameAndLocationLabel(
     featureDictionary: FeatureDictionary?,
     showHouseNumber: Boolean? = null
 ): AnnotatedString? {
-    val locale = Locale.current
-    val theme = isSystemInDarkTheme()
-    val density = LocalDensity.current
     val layoutDirection = LocalLayoutDirection.current
-    val resourceEnvironment = remember(locale, theme, density) { getSystemResourceEnvironment() }
+    val resourceEnvironment = rememberResourceEnvironment()
     val textState by produceState<AnnotatedString?>(initialValue = null) {
         value = getNameAndLocationLabel(
             resourceEnvironment = resourceEnvironment,
