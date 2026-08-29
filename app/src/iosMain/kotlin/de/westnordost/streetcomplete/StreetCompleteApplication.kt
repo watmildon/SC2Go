@@ -1,6 +1,13 @@
 package de.westnordost.streetcomplete
 
+import de.westnordost.streetcomplete.data.Cleaner
+import de.westnordost.streetcomplete.data.FeedsUpdater
 import de.westnordost.streetcomplete.data.Preloader
+import de.westnordost.streetcomplete.data.download.tiles.DownloadedTilesController
+import de.westnordost.streetcomplete.data.edithistory.EditHistoryController
+import de.westnordost.streetcomplete.data.preferences.Preferences
+import de.westnordost.streetcomplete.data.preferences.ResurveyIntervalsUpdater
+import de.westnordost.streetcomplete.util.ktx.nowAsEpochMilliseconds
 import de.westnordost.streetcomplete.util.logs.DatabaseLogger
 import de.westnordost.streetcomplete.util.logs.KermitLogger
 import de.westnordost.streetcomplete.util.logs.Log
@@ -23,7 +30,31 @@ fun initApp() {
     Log.instances.add(koin.get<DatabaseLogger>())
 
     applicationScope.launch {
+        // in one coroutine, so that the pruning happens after the preloading, as on Android
         koin.get<Preloader>().preload()
+        koin.get<EditHistoryController>().deleteSyncedOlderThan(
+            nowAsEpochMilliseconds() - ApplicationConstants.MAX_UNDO_HISTORY_AGE
+        )
+    }
+
+    koin.get<FeedsUpdater>().updateNow()
+
+    /* Android schedules this through the WorkManager, once a day and not until an hour after
+       start. iOS has nothing comparable that is worth the trouble here, so it is done at start
+       instead - but at most daily, because cleaning holds the database lock for as long as it
+       takes, which would otherwise be while the map is trying to draw. */
+    koin.get<Cleaner>().cleanOldAtMostDaily()
+
+    /* also registers its listener on the resurvey intervals setting, which is why this is needed
+       at all: nothing else on iOS ever instantiates it. Relies on it being registered as a single */
+    koin.get<ResurveyIntervalsUpdater>().update()
+
+    val prefs = koin.get<Preferences>()
+    val lastVersion = prefs.lastDataVersion
+    if (BuildConfig.VERSION_NAME != lastVersion) {
+        prefs.lastDataVersion = BuildConfig.VERSION_NAME
+        // on each new version, invalidate the quest cache
+        if (lastVersion != null) koin.get<DownloadedTilesController>().invalidateAll()
     }
 }
 
