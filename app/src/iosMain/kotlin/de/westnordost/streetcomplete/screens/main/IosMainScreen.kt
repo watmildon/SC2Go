@@ -18,6 +18,7 @@ import de.westnordost.streetcomplete.data.download.tiles.asBoundingBoxOfEnclosin
 import de.westnordost.streetcomplete.data.osm.mapdata.BoundingBox
 import de.westnordost.streetcomplete.data.osm.mapdata.LatLon
 import de.westnordost.streetcomplete.data.preferences.Preferences
+import de.westnordost.streetcomplete.data.quest.AutoSyncer
 import de.westnordost.streetcomplete.screens.main.map.toBoundingBox
 import de.westnordost.streetcomplete.screens.main.map.toLatLon
 import de.westnordost.streetcomplete.util.logs.Log
@@ -38,7 +39,9 @@ import kotlin.math.PI
 import kotlin.math.sqrt
 import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import org.maplibre.compose.camera.CameraPosition
 import org.maplibre.compose.camera.rememberCameraState
 
@@ -55,6 +58,14 @@ fun IosMainScreen() {
 
     val prefs: Preferences = koinInject()
 
+    /* uploads edits as they are made and downloads around the user's location, the same way
+       MainActivity hooks it into its lifecycle on Android */
+    val autoSyncer: AutoSyncer = koinInject()
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner, autoSyncer) {
+        lifecycleOwner.lifecycle.addObserver(autoSyncer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(autoSyncer) }
+    }
 
     val scope = rememberCoroutineScope()
     val density = LocalDensity.current
