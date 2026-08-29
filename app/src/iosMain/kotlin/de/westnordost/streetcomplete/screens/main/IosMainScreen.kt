@@ -28,6 +28,7 @@ import de.westnordost.streetcomplete.screens.main.map.MainMap
 import de.westnordost.streetcomplete.screens.main.map.layers.Marker as MapMarker
 import de.westnordost.streetcomplete.ui.common.quest.Marker as QuestMarker
 import de.westnordost.streetcomplete.screens.about.AboutNavHost
+import de.westnordost.streetcomplete.screens.main.map.maplibre.CameraPosition as MapCameraPosition
 import de.westnordost.streetcomplete.screens.main.map.toPosition
 import de.westnordost.streetcomplete.screens.settings.SettingsDestination
 import de.westnordost.streetcomplete.screens.settings.SettingsNavHost
@@ -54,6 +55,7 @@ fun IosMainScreen() {
 
     val prefs: Preferences = koinInject()
 
+
     val scope = rememberCoroutineScope()
     val density = LocalDensity.current
     // pick up where the user left off, same as the Android map does
@@ -65,6 +67,19 @@ fun IosMainScreen() {
             tilt = prefs.mapTilt,
         )
     )
+
+    /* MainScreen needs to know where the map is - among other things, it does not show any bottom
+       sheet at all while the camera is unknown */
+    LaunchedEffect(cameraState.position, cameraState.viewport) {
+        val position = cameraState.position
+        viewModel.mapCamera.value = MapCameraPosition(
+            position = position.target.toLatLon(),
+            rotation = position.bearing,
+            tilt = position.tilt,
+            zoom = position.zoom,
+        )
+        viewModel.metersPerDp.value = cameraState.viewport?.metersPerDpAtTarget ?: 0.0
+    }
 
     // ...and remember where they are now
     LaunchedEffect(cameraState.position) {
