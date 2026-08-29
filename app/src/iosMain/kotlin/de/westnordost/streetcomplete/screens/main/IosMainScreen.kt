@@ -1,6 +1,7 @@
 package de.westnordost.streetcomplete.screens.main
 
 import androidx.compose.foundation.layout.Box
+import androidx.compose.material.Surface
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -26,7 +27,11 @@ import de.westnordost.streetcomplete.screens.main.edithistory.EditHistoryViewMod
 import de.westnordost.streetcomplete.screens.main.map.MainMap
 import de.westnordost.streetcomplete.screens.main.map.layers.Marker as MapMarker
 import de.westnordost.streetcomplete.ui.common.quest.Marker as QuestMarker
+import de.westnordost.streetcomplete.screens.about.AboutNavHost
 import de.westnordost.streetcomplete.screens.main.map.toPosition
+import de.westnordost.streetcomplete.screens.settings.SettingsDestination
+import de.westnordost.streetcomplete.screens.settings.SettingsNavHost
+import de.westnordost.streetcomplete.screens.user.UserNavHost
 import kotlinx.coroutines.launch
 import kotlin.math.PI
 import kotlin.math.sqrt
@@ -35,7 +40,6 @@ import org.koin.compose.viewmodel.koinViewModel
 import androidx.compose.runtime.LaunchedEffect
 import org.maplibre.compose.camera.CameraPosition
 import org.maplibre.compose.camera.rememberCameraState
-import de.westnordost.streetcomplete.screens.main.map.toPosition as latLonToPosition
 
 /** The real main screen, i.e. the map with all the controls on top of it.
  *
@@ -55,7 +59,7 @@ fun IosMainScreen() {
     // pick up where the user left off, same as the Android map does
     val cameraState = rememberCameraState(
         firstPosition = CameraPosition(
-            target = prefs.mapPosition.latLonToPosition(),
+            target = prefs.mapPosition.toPosition(),
             zoom = prefs.mapZoom,
             bearing = prefs.mapRotation,
             tilt = prefs.mapTilt,
@@ -73,6 +77,8 @@ fun IosMainScreen() {
 
     val shownBottomSheet by mainBottomSheetViewModel.shownBottomSheet.collectAsState()
     var shownMarkers by remember { mutableStateOf<Collection<MapMarker>?>(null) }
+    // the screens that are their own Activity on Android are shown on top of the map here
+    var shownScreen by remember { mutableStateOf<FullScreen?>(null) }
 
     fun zoomBy(diff: Double) {
         scope.launch {
@@ -113,17 +119,39 @@ fun IosMainScreen() {
             onClickCreate = { mainBottomSheetViewModel.showCreateNote(null) },
             onClickStopTrackRecording = { },
             onDownload = { viewModel.download(cameraState.downloadArea() ?: return@MainScreen) },
-            onClickSettings = { },
-            onClickQuestSettings = { },
-            onClickAbout = { },
-            onClickProfile = { },
-            onClickLogin = { },
+            onClickSettings = { shownScreen = FullScreen.Settings },
+            onClickQuestSettings = { shownScreen = FullScreen.QuestSettings },
+            onClickAbout = { shownScreen = FullScreen.About },
+            onClickProfile = { shownScreen = FullScreen.Profile },
+            onClickLogin = { shownScreen = FullScreen.Login },
             onSetMapMarkers = { markers -> shownMarkers = markers.map { it.toMapMarker() } },
             onSolvedQuest = { _, _ -> },
             getOffset = { position -> cameraState.screenOffsetOf(position, density) },
         )
+
+        val goBack = { shownScreen = null }
+        when (shownScreen) {
+            null -> {}
+            // opaque, so that the map does not show through and keeps rendering behind it
+            else -> Surface(Modifier.fillMaxSize()) {
+                when (shownScreen) {
+                    FullScreen.Settings -> SettingsNavHost(onClickBack = goBack)
+                    FullScreen.QuestSettings -> SettingsNavHost(
+                        onClickBack = goBack,
+                        startDestination = SettingsDestination.QuestSelection,
+                    )
+                    FullScreen.About -> AboutNavHost(onClickBack = goBack)
+                    FullScreen.Profile -> UserNavHost(launchAuth = false, onClickBack = goBack)
+                    FullScreen.Login -> UserNavHost(launchAuth = true, onClickBack = goBack)
+                    null -> {}
+                }
+            }
+        }
     }
 }
+
+/** The screens that are a separate Activity on Android */
+private enum class FullScreen { Settings, QuestSettings, About, Profile, Login }
 
 /** The area to download for the currently displayed map area, or null if it is not suitable.
  *  Mirrors what MainActivity.getDownloadArea does on Android, minus the toasts. */
