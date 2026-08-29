@@ -91,6 +91,38 @@ If you need to find things where help is especially appreciated [have a look at 
 
 To build and test StreetComplete [download and install Android Studio](https://developer.android.com/studio/) which comes bundled with all tools needed, checkout and open the project in this application and click on the green play button on the top. If your first build fails due to missing dependencies, make sure [you have accepted the required license agreements](https://developer.android.com/studio/intro/update#download-with-gradle).
 
+The build needs a **JDK 21** toolchain. Android Studio bundles a newer JDK, so if the build fails with `Cannot find a Java installation on your machine ... matching: {languageVersion=21, ...}`, install a JDK 21 and select it under *Settings → Build, Execution, Deployment → Build Tools → Gradle → Gradle JDK*, or point Gradle at it in `~/.gradle/gradle.properties`:
+
+```
+org.gradle.java.installations.paths=/path/to/jdk-21
+```
+
+### Building for iOS
+
+The app is currently [being migrated to a multiplatform app](https://github.com/streetcomplete/StreetComplete/issues/5421) so that it also runs on iOS. Building that requires macOS and [Xcode](https://developer.apple.com/xcode/), in addition to the above — the Android SDK is still needed, because the shared `:app` module also has an Android target.
+
+To check that the shared code still compiles for iOS:
+
+```
+./gradlew :app:linkDebugFrameworkIosSimulatorArm64
+```
+
+To run the app, open `iosApp/iosApp.xcodeproj` in Xcode and run it from there. Xcode builds the Kotlin framework itself in its *Compile Kotlin Framework* build phase, which calls `./gradlew :app:embedAndSignAppleFrameworkForXcode`.
+
+Note that on iOS, only the screens that have already been migrated are reachable — see [`IosApp.kt`](app/src/iosMain/kotlin/de/westnordost/streetcomplete/IosApp.kt).
+
+To run it on an actual device, set `TEAM_ID` in [`iosApp/Configuration/Config.xcconfig`](iosApp/Configuration/Config.xcconfig) to your Apple developer team id. If you are not a member of the StreetComplete developer team, you must also change `PRODUCT_BUNDLE_IDENTIFIER` in that file to something unique, otherwise signing fails with *"Failed Registering Bundle Identifier"*.
+
+Do not commit either change. To keep them out of `git status`:
+
+```
+git update-index --skip-worktree iosApp/Configuration/Config.xcconfig
+```
+
+Beware that selecting a team in Xcode's *Signing & Capabilities* tab writes your team id into `iosApp/iosApp.xcodeproj/project.pbxproj`, replacing the `${TEAM_ID}` reference. Revert that file if that happens.
+
+If you use [kdoctor](https://github.com/Kotlin/kdoctor) to check your setup, its warning about a missing CocoaPods installation can be ignored: this project does not use CocoaPods.
+
 ### Developing new quests
 
 You want to contribute a new quest right away? That's great!
