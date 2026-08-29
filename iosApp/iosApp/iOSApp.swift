@@ -4,7 +4,8 @@ import SwiftUI
 @main
 struct iOSApp: App {
     init() {
-        KoinKt.doInitKoin()
+        // starts Koin itself
+        StreetCompleteApplicationKt.doInitApp()
     }
 
     var body: some Scene {
