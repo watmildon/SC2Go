@@ -10,7 +10,11 @@ import de.westnordost.streetcomplete.data.osmnotes.NoteController
 import de.westnordost.streetcomplete.data.quest.QuestTypeRegistry
 import de.westnordost.streetcomplete.util.ktx.format
 import de.westnordost.streetcomplete.util.ktx.nowAsEpochMilliseconds
+import de.westnordost.streetcomplete.data.preferences.Preferences
+import de.westnordost.streetcomplete.util.ktx.now
+import kotlinx.datetime.LocalDate
 import de.westnordost.streetcomplete.util.logs.Log
+import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineName
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -27,10 +31,28 @@ class Cleaner(
     private val logsController: LogsController,
     private val mapTilesDownloader: MapTilesDownloader,
     private val calendarEventsController: CalendarEventsController,
+    private val prefs: Preferences,
 ) {
-    private val scope = CoroutineScope(SupervisorJob() + CoroutineName("Cleaner") + Dispatchers.IO)
+    private val scope = CoroutineScope(
+        SupervisorJob() + CoroutineName(TAG) + Dispatchers.IO +
+        /* cleaning up is entirely optional, so it must never be able to take the app down, which
+           an unhandled failure would do on Kotlin/Native - and it runs at startup on iOS, so that
+           would be a crash loop with no way back into the app */
+        CoroutineExceptionHandler { _, e -> Log.e(TAG, "Unable to clean up", e) }
+    )
+
+    /** clean up at most daily: this holds the database lock for as long as it takes, so it should
+     *  not be done on every app start */
+    fun cleanOldAtMostDaily() {
+        val today = LocalDate.now()
+        val lastCleanup = prefs.lastCleanup
+        if (lastCleanup != null && lastCleanup >= today) return
+
+        cleanOld()
+    }
 
     fun cleanOld() = scope.launch {
+        prefs.lastCleanup = LocalDate.now()
         val time = nowAsEpochMilliseconds()
 
         val oldDataTimestamp = nowAsEpochMilliseconds() - ApplicationConstants.DELETE_OLD_DATA_AFTER

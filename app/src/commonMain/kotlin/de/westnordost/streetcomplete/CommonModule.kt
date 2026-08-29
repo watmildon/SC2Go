@@ -248,7 +248,7 @@ val commonModule = module {
     single<Res> { Res }
     single<FileSystem> { SystemFileSystem }
 
-    factory { Cleaner(get(), get(), get(), get(), get(), get(), get()) }
+    factory { Cleaner(get(), get(), get(), get(), get(), get(), get(), get()) }
     factory { CacheTrimmer(get(), get()) }
     factory { Preloader(get(named("CountryBoundariesLazy")), get(named("FeatureDictionaryLazy"))) }
 

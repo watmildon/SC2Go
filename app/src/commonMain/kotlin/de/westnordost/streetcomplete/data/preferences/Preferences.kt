@@ -125,6 +125,10 @@ class Preferences(private val prefs: ObservableSettings) {
     var hasShownOverlaysTutorial: Boolean by prefs.boolean(HAS_SHOWN_OVERLAYS_TUTORIAL, false)
 
     // update feed
+    var lastCleanup: LocalDate?
+        set(value) { prefs.putStringOrNull(LAST_CLEANUP, value?.toString()) }
+        get() = prefs.getStringOrNull(LAST_CLEANUP)?.let { LocalDate.parse(it) }
+
     var lastFeedUpdate: LocalDate?
         set(value) { prefs.putStringOrNull(LAST_FEED_UPDATE, value?.toString()) }
         get() = prefs.getStringOrNull(LAST_FEED_UPDATE)?.let { LocalDate.parse(it) }
@@ -272,6 +276,7 @@ class Preferences(private val prefs: ObservableSettings) {
         private const val HAS_SHOWN_OVERLAYS_TUTORIAL = "hasShownOverlaysTutorial"
 
         // update feed
+        private const val LAST_CLEANUP = "lastCleanup"
         private const val LAST_FEED_UPDATE = "lastFeedUpdate"
 
         // messages
