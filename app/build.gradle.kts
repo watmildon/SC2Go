@@ -252,8 +252,11 @@ kotlin {
                 implementation("io.ktor:ktor-client-android:3.5.1")
 
                 // map and location
-                // provided transitively by maplibre-compose
-                //implementation("org.maplibre.gl:android-sdk-opengl:13.3.1")
+                /* still needed directly: the Android map is still the fragment based one. Not a
+                   transitive dependency of maplibre-compose any more as of its 0.15.0 */
+                implementation("org.maplibre.gl:android-sdk-opengl:13.3.1")
+                // and maplibre-compose needs to be told which backend to render with
+                runtimeOnly("org.maplibre.compose:maplibre-compose-runtime-opengl-android:0.15.0")
 
                 // required to @Preview composables in Android Studio
                 runtimeOnly("androidx.compose.ui:ui-tooling:1.10.0")
