@@ -16,10 +16,13 @@ import kotlinx.coroutines.launch
 class DatabaseLogger(private val logsController: LogsController) : Logger {
     private val coroutineScope = CoroutineScope(
         SupervisorJob() + CoroutineName("DatabaseLogger") + Dispatchers.IO +
-        /* if writing a log to the database fails, there is nothing useful left to do about it -
-           and definitely not log it. Without this, the failure is unhandled, which on
-           Kotlin/Native takes down the whole app: logging must never be able to do that. */
-        CoroutineExceptionHandler { _, _ -> }
+        /* without this, a failed log write is unhandled, which on Kotlin/Native takes down the
+           whole app: logging must never be able to do that, the less so as it is what error
+           handling itself calls */
+        CoroutineExceptionHandler { _, e ->
+            // not through Log: that would come straight back here
+            co.touchlab.kermit.Logger.e("DatabaseLogger", e) { "Unable to write log to database" }
+        }
     )
 
     override fun v(tag: String, message: String) {
