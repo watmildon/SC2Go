@@ -131,6 +131,7 @@ fun MainBottomSheet(
                 mapTilt = mapTilt,
                 mapMetersPerDp = mapMetersPerDp,
                 onSetMapMarkers = onSetMapMarkers,
+                getOffset = getOffset,
                 modifier = modifier,
             )
         }

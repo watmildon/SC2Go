@@ -43,6 +43,7 @@ import de.westnordost.streetcomplete.ui.common.dialogs.ConfirmationDialog
 import de.westnordost.streetcomplete.ui.common.quest.CantSayDialog
 import de.westnordost.streetcomplete.ui.common.quest.ConfirmDeleteDialog
 import de.westnordost.streetcomplete.ui.common.quest.LocalElement
+import de.westnordost.streetcomplete.ui.common.quest.LocalGetOffsetCallback
 import de.westnordost.streetcomplete.ui.common.quest.LocalMapMarkersCallback
 import de.westnordost.streetcomplete.ui.common.quest.LocalMapMetersPerDp
 import de.westnordost.streetcomplete.ui.common.quest.LocalMapRotation
@@ -64,6 +65,8 @@ import org.koin.compose.koinInject
  *
  *  @param onSetMapMarkers is called when the form shown wishes to show markers on the map. E.g. the
  *         split way form and level form shows markers
+ *  @param getOffset returns the offset on the screen of the given position. E.g. the split way
+ *         form uses it to draw the scissors where the way would be cut.
  */
 @Composable
 fun <T> OsmQuestFormContainer(
@@ -80,6 +83,7 @@ fun <T> OsmQuestFormContainer(
     mapTilt: Float,
     mapMetersPerDp: Double,
     onSetMapMarkers: (Iterable<Marker>) -> Unit,
+    getOffset: (position: LatLon) -> Offset?,
     modifier: Modifier = Modifier,
     countryBoundaries: CountryBoundaries = koinInject(),
     featureDictionary: FeatureDictionary = koinInject(),
@@ -124,7 +128,8 @@ fun <T> OsmQuestFormContainer(
         LocalMapRotation provides mapRotation,
         LocalMapTilt provides mapTilt,
         LocalMapMetersPerDp provides mapMetersPerDp,
-        LocalMapMarkersCallback provides onSetMapMarkers
+        LocalMapMarkersCallback provides onSetMapMarkers,
+        LocalGetOffsetCallback provides getOffset,
     ) {
         AnimatedContent(
             targetState = state,

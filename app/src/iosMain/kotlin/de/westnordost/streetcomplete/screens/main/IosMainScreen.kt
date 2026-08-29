@@ -1,6 +1,9 @@
 package de.westnordost.streetcomplete.screens.main
 
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.calculateEndPadding
+import androidx.compose.foundation.layout.calculateStartPadding
 import androidx.compose.material.Surface
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
@@ -13,6 +16,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.platform.LocalWindowInfo
+import androidx.compose.ui.unit.DpOffset
+import androidx.compose.ui.unit.DpSize
+import androidx.compose.ui.unit.LayoutDirection
 import de.westnordost.streetcomplete.ApplicationConstants
 import de.westnordost.streetcomplete.data.download.tiles.asBoundingBoxOfEnclosingTiles
 import de.westnordost.streetcomplete.data.osm.mapdata.BoundingBox
@@ -41,6 +49,7 @@ import de.westnordost.streetcomplete.screens.main.map.toPosition
 import de.westnordost.streetcomplete.screens.settings.SettingsDestination
 import de.westnordost.streetcomplete.screens.settings.SettingsNavHost
 import de.westnordost.streetcomplete.screens.user.UserNavHost
+import de.westnordost.streetcomplete.ui.theme.Dimensions
 import kotlinx.coroutines.launch
 import kotlin.math.PI
 import kotlin.math.sqrt
@@ -87,12 +96,35 @@ fun IosMainScreen() {
         )
     )
 
+    val shownBottomSheet by mainBottomSheetViewModel.shownBottomSheet.collectAsState()
+
+    /* The forms that let the user aim at something on the map - split way, move node, create node
+       in an overlay - draw their crosshair in the middle of the part of the map that the bottom
+       sheet does not cover, not in the middle of the screen. On Android, the map camera is given
+       that same padding while a form is open, which moves its target under the crosshair. MapLibre
+       Compose has no persistent camera padding, so the position under the crosshair is computed
+       here instead - without it, those forms aim half a sheet height too far down.
+
+       positionFromScreenLocation wants an offset from the top left of the map, and this is one
+       from the top left of the window: the same thing only as long as the map fills the window,
+       as it does here. */
+    val windowInfo = LocalWindowInfo.current
+    val layoutDirection = LocalLayoutDirection.current
+    val crosshairOffset = if (shownBottomSheet != null) {
+        Dimensions.getOpenQuestFormMapPadding(windowInfo)
+            .centerOffsetIn(windowInfo.containerDpSize, layoutDirection)
+    } else {
+        null
+    }
+
     /* MainScreen needs to know where the map is - among other things, it does not show any bottom
        sheet at all while the camera is unknown */
-    LaunchedEffect(cameraState.position, cameraState.viewport) {
+    LaunchedEffect(cameraState.position, cameraState.viewport, crosshairOffset) {
         val position = cameraState.position
+        val target = crosshairOffset?.let { cameraState.positionFromScreenLocation(it) }
+            ?: position.target
         viewModel.mapCamera.value = MapCameraPosition(
-            position = position.target.toLatLon(),
+            position = target.toLatLon(),
             rotation = position.bearing,
             tilt = position.tilt,
             zoom = position.zoom,
@@ -109,7 +141,6 @@ fun IosMainScreen() {
         prefs.mapTilt = position.tilt
     }
 
-    val shownBottomSheet by mainBottomSheetViewModel.shownBottomSheet.collectAsState()
     val isShowingUndoHistory by editHistoryViewModel.isShowingSidebar.collectAsState()
     var shownMarkers by remember { mutableStateOf<Collection<MapMarker>?>(null) }
     var lastQuestSolved by remember { mutableStateOf<QuestSolvedEvent?>(null) }
@@ -238,4 +269,25 @@ private fun org.maplibre.compose.camera.CameraState.screenOffsetOf(
 ): Offset? {
     val dpOffset = screenLocationFromPosition(position.toPosition()) ?: return null
     return with(density) { Offset(dpOffset.x.toPx(), dpOffset.y.toPx()) }
+}
+
+/** The middle of what is left of a map of size [size] once [this] padding is applied to it, i.e.
+ *  where the forms that let the user aim at something draw their crosshair.
+ *
+ *  Left and right rather than start and end, because that is how Modifier.padding resolves the
+ *  PaddingValues the crosshair is actually drawn with, and how MainActivity computes the same
+ *  point on Android. It makes a difference in right-to-left layouts, where the padding for the
+ *  form is absolute. */
+private fun PaddingValues.centerOffsetIn(
+    size: DpSize,
+    layoutDirection: LayoutDirection,
+): DpOffset {
+    val left = calculateLeftPadding(layoutDirection)
+    val right = calculateRightPadding(layoutDirection)
+    val top = calculateTopPadding()
+    val bottom = calculateBottomPadding()
+    return DpOffset(
+        x = left + (size.width - left - right) / 2,
+        y = top + (size.height - top - bottom) / 2,
+    )
 }

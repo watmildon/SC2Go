@@ -24,3 +24,6 @@ captures
 !*.xcworkspace/contents.xcworkspacedata
 **/xcshareddata/WorkspaceSettings.xcsettings
 xcuserdata
+
+# local iOS-port research + notes, not for upstream
+/research/
