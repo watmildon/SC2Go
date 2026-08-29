@@ -1,6 +1,6 @@
 package de.westnordost.streetcomplete.screens.main.map
 
-import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.material.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -109,7 +109,7 @@ fun MainMap(
         onMapLongClick = onMapLongClick,
     ) {
         val languages = listOf(Locale.current.language)
-        val colors = if (isSystemInDarkTheme()) MapColors.Night else MapColors.Light
+        val colors = if (MaterialTheme.colors.isLight) MapColors.Light else MapColors.Night
 
         val overlayIcons = remember(styledElements) { styledElements.overlayIcons() }
 

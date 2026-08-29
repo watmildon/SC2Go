@@ -1,12 +1,12 @@
 package de.westnordost.streetcomplete.screens.settings.debug
 
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material.AppBarDefaults
 import androidx.compose.material.IconButton
 import androidx.compose.material.Text
 import androidx.compose.material.TopAppBar
+import androidx.compose.material.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.intl.Locale
@@ -70,7 +70,7 @@ fun ShowMapScreen(
             zoomRange = 0f..22f,
             cameraState = cameraState,
         ) {
-            val colors = if (isSystemInDarkTheme()) MapColors.Night else MapColors.Light
+            val colors = if (MaterialTheme.colors.isLight) MapColors.Light else MapColors.Night
             MapStyle(
                 colors = colors,
                 languages = listOf(Locale.current.language),
