@@ -12,15 +12,30 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.platform.LocalDensity
+import de.westnordost.streetcomplete.ApplicationConstants
+import de.westnordost.streetcomplete.data.download.tiles.asBoundingBoxOfEnclosingTiles
+import de.westnordost.streetcomplete.data.osm.mapdata.BoundingBox
 import de.westnordost.streetcomplete.data.osm.mapdata.LatLon
+import de.westnordost.streetcomplete.data.preferences.Preferences
+import de.westnordost.streetcomplete.screens.main.map.toBoundingBox
+import de.westnordost.streetcomplete.screens.main.map.toLatLon
+import de.westnordost.streetcomplete.util.logs.Log
+import de.westnordost.streetcomplete.util.math.area
+import de.westnordost.streetcomplete.util.math.enclosingBoundingBox
 import de.westnordost.streetcomplete.screens.main.edithistory.EditHistoryViewModel
 import de.westnordost.streetcomplete.screens.main.map.MainMap
 import de.westnordost.streetcomplete.screens.main.map.layers.Marker as MapMarker
 import de.westnordost.streetcomplete.ui.common.quest.Marker as QuestMarker
 import de.westnordost.streetcomplete.screens.main.map.toPosition
 import kotlinx.coroutines.launch
+import kotlin.math.PI
+import kotlin.math.sqrt
+import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
+import androidx.compose.runtime.LaunchedEffect
+import org.maplibre.compose.camera.CameraPosition
 import org.maplibre.compose.camera.rememberCameraState
+import de.westnordost.streetcomplete.screens.main.map.toPosition as latLonToPosition
 
 /** The real main screen, i.e. the map with all the controls on top of it.
  *
@@ -33,9 +48,28 @@ fun IosMainScreen() {
     val editHistoryViewModel: EditHistoryViewModel = koinViewModel()
     val mainBottomSheetViewModel: MainBottomSheetViewModel = koinViewModel()
 
+    val prefs: Preferences = koinInject()
+
     val scope = rememberCoroutineScope()
     val density = LocalDensity.current
-    val cameraState = rememberCameraState()
+    // pick up where the user left off, same as the Android map does
+    val cameraState = rememberCameraState(
+        firstPosition = CameraPosition(
+            target = prefs.mapPosition.latLonToPosition(),
+            zoom = prefs.mapZoom,
+            bearing = prefs.mapRotation,
+            tilt = prefs.mapTilt,
+        )
+    )
+
+    // ...and remember where they are now
+    LaunchedEffect(cameraState.position) {
+        val position = cameraState.position
+        prefs.mapPosition = position.target.toLatLon()
+        prefs.mapZoom = position.zoom
+        prefs.mapRotation = position.bearing
+        prefs.mapTilt = position.tilt
+    }
 
     val shownBottomSheet by mainBottomSheetViewModel.shownBottomSheet.collectAsState()
     var shownMarkers by remember { mutableStateOf<Collection<MapMarker>?>(null) }
@@ -78,7 +112,7 @@ fun IosMainScreen() {
             onClickLocationPointer = { },
             onClickCreate = { mainBottomSheetViewModel.showCreateNote(null) },
             onClickStopTrackRecording = { },
-            onDownload = { },
+            onDownload = { viewModel.download(cameraState.downloadArea() ?: return@MainScreen) },
             onClickSettings = { },
             onClickQuestSettings = { },
             onClickAbout = { },
@@ -89,6 +123,25 @@ fun IosMainScreen() {
             getOffset = { position -> cameraState.screenOffsetOf(position, density) },
         )
     }
+}
+
+/** The area to download for the currently displayed map area, or null if it is not suitable.
+ *  Mirrors what MainActivity.getDownloadArea does on Android, minus the toasts. */
+private fun org.maplibre.compose.camera.CameraState.downloadArea(): BoundingBox? {
+    val displayedArea = viewport?.visibleBoundingBox?.toBoundingBox() ?: return null
+
+    val enclosingBBox = displayedArea.asBoundingBoxOfEnclosingTiles(ApplicationConstants.DOWNLOAD_TILE_ZOOM)
+    val areaInSqKm = enclosingBBox.area() / 1000000
+    if (areaInSqKm > ApplicationConstants.MAX_DOWNLOADABLE_AREA_IN_SQKM) {
+        Log.w("IosMainScreen", "Download area too big")
+        return null
+    }
+    // below a certain threshold, it does not make sense to download, so let's enlarge it
+    if (areaInSqKm < ApplicationConstants.MIN_DOWNLOADABLE_AREA_IN_SQKM) {
+        val radius = sqrt(1000000 * ApplicationConstants.MIN_DOWNLOADABLE_AREA_IN_SQKM / PI)
+        return position.target.toLatLon().enclosingBoundingBox(radius)
+    }
+    return enclosingBBox
 }
 
 /* the map layers and the quest forms each declare their own identical Marker type */
