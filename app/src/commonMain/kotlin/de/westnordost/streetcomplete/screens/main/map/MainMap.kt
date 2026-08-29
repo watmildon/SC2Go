@@ -201,7 +201,7 @@ fun MainMap(
 }
 
 // need to refer to the local (font) resources platform-independently
-private val BASE_STYLE = """
+internal val BASE_STYLE = """
     {
       "version": 8,
       "name": "Empty",
