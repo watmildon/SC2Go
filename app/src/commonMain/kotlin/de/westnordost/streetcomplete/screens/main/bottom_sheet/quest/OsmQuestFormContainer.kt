@@ -44,11 +44,13 @@ import de.westnordost.streetcomplete.ui.common.quest.CantSayDialog
 import de.westnordost.streetcomplete.ui.common.quest.ConfirmDeleteDialog
 import de.westnordost.streetcomplete.ui.common.quest.LocalElement
 import de.westnordost.streetcomplete.ui.common.quest.LocalGetOffsetCallback
+import de.westnordost.streetcomplete.ui.common.quest.LocalLastMapClick
 import de.westnordost.streetcomplete.ui.common.quest.LocalMapMarkersCallback
 import de.westnordost.streetcomplete.ui.common.quest.LocalMapMetersPerDp
 import de.westnordost.streetcomplete.ui.common.quest.LocalMapRotation
 import de.westnordost.streetcomplete.ui.common.quest.LocalMapTilt
 import de.westnordost.streetcomplete.ui.common.quest.LocalQuestType
+import de.westnordost.streetcomplete.ui.common.quest.MapClick
 import de.westnordost.streetcomplete.ui.common.quest.Marker
 import de.westnordost.streetcomplete.ui.util.ReplaceBottomSheetTransitionSpec
 import de.westnordost.streetcomplete.ui.util.rememberSerializable
@@ -67,6 +69,8 @@ import org.koin.compose.koinInject
  *         split way form and level form shows markers
  *  @param getOffset returns the offset on the screen of the given position. E.g. the split way
  *         form uses it to draw the scissors where the way would be cut.
+ *  @param lastMapClick where the user last clicked the map itself. The forms that ask for a name
+ *         use it to offer the name of a road the user tapped nearby.
  */
 @Composable
 fun <T> OsmQuestFormContainer(
@@ -84,6 +88,7 @@ fun <T> OsmQuestFormContainer(
     mapMetersPerDp: Double,
     onSetMapMarkers: (Iterable<Marker>) -> Unit,
     getOffset: (position: LatLon) -> Offset?,
+    lastMapClick: MapClick?,
     modifier: Modifier = Modifier,
     countryBoundaries: CountryBoundaries = koinInject(),
     featureDictionary: FeatureDictionary = koinInject(),
@@ -130,6 +135,7 @@ fun <T> OsmQuestFormContainer(
         LocalMapMetersPerDp provides mapMetersPerDp,
         LocalMapMarkersCallback provides onSetMapMarkers,
         LocalGetOffsetCallback provides getOffset,
+        LocalLastMapClick provides lastMapClick,
     ) {
         AnimatedContent(
             targetState = state,

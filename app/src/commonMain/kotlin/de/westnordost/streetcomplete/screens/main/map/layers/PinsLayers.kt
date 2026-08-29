@@ -86,7 +86,7 @@ fun PinsLayers(
     }
 
     SymbolLayer(
-        id = "pin-cluster-layer",
+        id = PIN_CLUSTER_LAYER,
         source = source,
         minZoom = CLUSTER_MIN_ZOOM.toFloat(),
         maxZoom = CLUSTER_MAX_ZOOM.toFloat(),
@@ -126,7 +126,7 @@ fun PinsLayers(
         translateAnchor = const(TranslateAnchor.Viewport),
     )
     SymbolLayer(
-        id = "pins-layer",
+        id = PINS_LAYER,
         source = source,
         minZoom = CLUSTER_MAX_ZOOM.toFloat(),
         filter = zoom() gt const(CLUSTER_MAX_ZOOM),
@@ -162,6 +162,12 @@ fun PinsLayers(
         onClick = ::onClick,
     )
 }
+
+const val PIN_CLUSTER_LAYER = "pin-cluster-layer"
+const val PINS_LAYER = "pins-layer"
+
+/** Ids of the layers drawn by [PinsLayers] that handle clicks themselves */
+val PINS_CLICKABLE_LAYERS = setOf(PIN_CLUSTER_LAYER, PINS_LAYER)
 
 private const val CLUSTER_MIN_ZOOM = 13
 private const val CLUSTER_MAX_ZOOM = 14

@@ -56,7 +56,7 @@ fun StyleableOverlayLabelLayer(
     onClickElement: (properties: JsonObject) -> Unit,
 ) {
     SymbolLayer(
-        id = "overlay-symbols",
+        id = OVERLAY_SYMBOLS_LAYER,
         source = source,
         minZoom = 17f,
         filter = feature.isPoint(),
@@ -125,7 +125,7 @@ fun StyleableOverlayLayers(
         join = const(LineJoin.Round),
     )
     FillLayer(
-        id = "overlay-fills",
+        id = OVERLAY_FILLS_LAYER,
         source = source,
         minZoom = MIN_ZOOM,
         filter = feature.isArea(),
@@ -134,7 +134,7 @@ fun StyleableOverlayLayers(
         onClick = { onClick(it, onClickElement) }
     )
     LineLayer(
-        id = "overlay-lines",
+        id = OVERLAY_LINES_LAYER,
         source = source,
         minZoom = MIN_ZOOM,
         filter = all(feature.isLines(), !feature.has("offset"), !dashed),
@@ -146,7 +146,7 @@ fun StyleableOverlayLayers(
         onClick = { onClick(it, onClickElement) }
     )
     LineLayer(
-        id = "overlay-lines-dashed",
+        id = OVERLAY_LINES_DASHED_LAYER,
         source = source,
         minZoom = MIN_ZOOM,
         filter = all(feature.isLines(), !feature.has("offset"), dashed),
@@ -229,5 +229,15 @@ private inline fun onClick(
     onClickElement(properties)
     return ClickResult.Consume
 }
+
+const val OVERLAY_SYMBOLS_LAYER = "overlay-symbols"
+const val OVERLAY_FILLS_LAYER = "overlay-fills"
+const val OVERLAY_LINES_LAYER = "overlay-lines"
+const val OVERLAY_LINES_DASHED_LAYER = "overlay-lines-dashed"
+
+/** Ids of the layers drawn by [StyleableOverlayLayers] that handle clicks themselves */
+val STYLEABLE_OVERLAY_CLICKABLE_LAYERS = setOf(
+    OVERLAY_SYMBOLS_LAYER, OVERLAY_FILLS_LAYER, OVERLAY_LINES_LAYER, OVERLAY_LINES_DASHED_LAYER
+)
 
 private val MIN_ZOOM = 14f

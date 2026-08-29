@@ -132,6 +132,7 @@ fun ShowQuestFormsScreen(
                 mapMetersPerDp = 0.01,
                 onSetMapMarkers = { /* No map here */ },
                 getOffset = { /* No map here */ null },
+                lastMapClick = null,
             )
         }
     }

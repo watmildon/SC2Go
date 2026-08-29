@@ -8,21 +8,28 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.DpOffset
+import androidx.compose.ui.unit.DpRect
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.text.intl.Locale
 import de.westnordost.streetcomplete.data.edithistory.EditKey
 import de.westnordost.streetcomplete.data.location.Location
 import de.westnordost.streetcomplete.data.osm.mapdata.ElementKey
+import de.westnordost.streetcomplete.data.osm.mapdata.LatLon
 import de.westnordost.streetcomplete.data.quest.QuestKey
 import de.westnordost.streetcomplete.resources.Res
+import de.westnordost.streetcomplete.util.math.distanceTo
 import de.westnordost.streetcomplete.screens.main.ShownBottomSheet
 import de.westnordost.streetcomplete.screens.main.map.layers.CurrentLocationLayers
 import de.westnordost.streetcomplete.screens.main.map.layers.DownloadedAreaLayer
 import de.westnordost.streetcomplete.screens.main.map.layers.FocusedGeometryLayers
 import de.westnordost.streetcomplete.screens.main.map.layers.GeometryMarkersLayers
 import de.westnordost.streetcomplete.screens.main.map.layers.Marker
+import de.westnordost.streetcomplete.screens.main.map.layers.PINS_CLICKABLE_LAYERS
 import de.westnordost.streetcomplete.screens.main.map.layers.PinsLayers
 import de.westnordost.streetcomplete.screens.main.map.layers.SelectedPinsLayer
 import de.westnordost.streetcomplete.screens.main.map.layers.StyleableOverlayLabelLayer
+import de.westnordost.streetcomplete.screens.main.map.layers.STYLEABLE_OVERLAY_CLICKABLE_LAYERS
 import de.westnordost.streetcomplete.screens.main.map.layers.StyleableOverlayLayers
 import de.westnordost.streetcomplete.screens.main.map.layers.StyleableOverlaySideLayer
 import de.westnordost.streetcomplete.screens.main.map.layers.overlayIcons
@@ -43,6 +50,7 @@ import org.maplibre.compose.util.ClickResult
 import org.maplibre.compose.util.MapClickHandler
 import org.maplibre.spatialk.geojson.FeatureCollection
 import org.maplibre.spatialk.geojson.Geometry
+import org.maplibre.spatialk.geojson.Position
 
 /**
  * MapLibre Map with StreetComplete theme and all the StreetComplete specific things displayed on
@@ -58,6 +66,10 @@ import org.maplibre.spatialk.geojson.Geometry
  *
  * @param isShowingUndoHistorySidebar whether the undo history sidebar is open. The overlay is
  * hidden when it is open.
+ *
+ * @param onClickMap called when the user clicked the map itself, i.e. not any pin, overlay element
+ * or other thing drawn on top of it. [clickAreaSizeInMeters] is how much ground the user's finger
+ * covered, so that what was clicked "near enough" can be worked out.
  * */
 @Composable
 fun MainMap(
@@ -70,6 +82,7 @@ fun MainMap(
     shownMarkers: Collection<Marker>?,
     isShowingUndoHistorySidebar: Boolean,
     modifier: Modifier = Modifier,
+    onClickMap: (position: LatLon, clickAreaSizeInMeters: Double) -> Unit = { _, _ -> },
     onMapLongClick: MapClickHandler = { _, _ -> ClickResult.Pass },
     viewModel: MainMapViewModel = koinViewModel(),
     cameraState: CameraState = rememberCameraState(),
@@ -101,6 +114,32 @@ fun MainMap(
         }
     }
 
+    /* MapLibre Compose calls onMapClick for every click, synchronously and before it has looked
+       at whether anything drawn on the map was hit - that is done afterwards, in a coroutine,
+       because querying the rendered features suspends. What is wanted here is Android's
+       behaviour: the map itself was clicked, i.e. nothing on it was. So ask the same question
+       here rather than trying to find out after the fact, which cannot be done without racing
+       the library's own query. */
+    fun onClickMapAt(position: Position, offset: DpOffset) {
+        coroutineScope.launch {
+            val radius = CLICK_AREA_SIZE.value.dp / 2
+            val clickArea = DpRect(
+                left = offset.x - radius,
+                top = offset.y - radius,
+                right = offset.x + radius,
+                bottom = offset.y + radius,
+            )
+            if (cameraState.queryRenderedFeatures(clickArea, CLICKABLE_LAYERS).isNotEmpty()) return@launch
+
+            /* how much ground the finger covered, the same way MainMapFragment.onClickMap
+               measures it: the distance to where the edge of the finger is */
+            val latLon = position.toLatLon()
+            val edge = cameraState.screenLocationFromPosition(position)
+                ?.let { cameraState.positionFromScreenLocation(DpOffset(it.x + radius, it.y)) }
+            onClickMap(latLon, edge?.toLatLon()?.let { latLon.distanceTo(it) } ?: 0.0)
+        }
+    }
+
     MaplibreMap(
         modifier = modifier,
         baseStyle = BaseStyle.Json(BASE_STYLE),
@@ -109,6 +148,7 @@ fun MainMap(
         // StreetComplete draws its own attribution
         overlay = MapOverlay.None,
         styleState = styleState,
+        onMapClick = { position, offset -> onClickMapAt(position, offset); ClickResult.Pass },
         onMapLongClick = onMapLongClick,
     ) {
         val languages = listOf(Locale.current.language)
@@ -222,3 +262,10 @@ internal val BASE_STYLE = """
       "layers": []
     }
     """.trimIndent()
+
+/** How much of the map the user's finger covers, as on Android (MainMapFragment) */
+private val CLICK_AREA_SIZE = 28.dp
+
+/** Every layer that handles clicks itself, so that a click on one of them does not also count as
+ *  a click on the map. Kept next to the layers that define them so the two cannot drift apart. */
+private val CLICKABLE_LAYERS = PINS_CLICKABLE_LAYERS + STYLEABLE_OVERLAY_CLICKABLE_LAYERS

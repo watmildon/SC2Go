@@ -23,6 +23,7 @@ import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.LayoutDirection
 import de.westnordost.streetcomplete.ApplicationConstants
 import de.westnordost.streetcomplete.data.download.tiles.asBoundingBoxOfEnclosingTiles
+import de.westnordost.streetcomplete.data.osm.geometry.ElementGeometry
 import de.westnordost.streetcomplete.data.osm.mapdata.BoundingBox
 import de.westnordost.streetcomplete.data.osm.mapdata.LatLon
 import de.westnordost.streetcomplete.data.preferences.Preferences
@@ -33,15 +34,20 @@ import org.maplibre.compose.location.LocationEvent
 import org.maplibre.compose.location.LocationProvider
 import org.maplibre.compose.location.LocationRequest
 import org.maplibre.spatialk.units.extensions.meters
+import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 import de.westnordost.streetcomplete.screens.main.map.toBoundingBox
+import de.westnordost.streetcomplete.screens.main.map.toGeoJsonBoundingBox
 import de.westnordost.streetcomplete.screens.main.map.toLatLon
 import de.westnordost.streetcomplete.util.logs.Log
 import de.westnordost.streetcomplete.util.math.area
 import de.westnordost.streetcomplete.util.math.enclosingBoundingBox
+import de.westnordost.streetcomplete.util.math.distanceTo
+import de.westnordost.streetcomplete.util.math.enlargedBy
 import de.westnordost.streetcomplete.screens.main.edithistory.EditHistoryViewModel
 import de.westnordost.streetcomplete.screens.main.map.MainMap
 import de.westnordost.streetcomplete.screens.main.map.layers.Marker as MapMarker
+import de.westnordost.streetcomplete.ui.common.quest.MapClick
 import de.westnordost.streetcomplete.ui.common.quest.Marker as QuestMarker
 import de.westnordost.streetcomplete.screens.about.AboutNavHost
 import de.westnordost.streetcomplete.screens.main.map.maplibre.CameraPosition as MapCameraPosition
@@ -52,6 +58,7 @@ import de.westnordost.streetcomplete.screens.user.UserNavHost
 import de.westnordost.streetcomplete.ui.theme.Dimensions
 import kotlinx.coroutines.launch
 import kotlin.math.PI
+import kotlin.math.max
 import kotlin.math.sqrt
 import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
@@ -59,6 +66,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import org.maplibre.compose.camera.CameraPosition
+import org.maplibre.compose.camera.CameraState
 import org.maplibre.compose.camera.rememberCameraState
 
 /** The real main screen, i.e. the map with all the controls on top of it.
@@ -117,6 +125,51 @@ fun IosMainScreen() {
         null
     }
 
+    /* When a quest is opened, Android moves the map so that the element the quest is about is
+       inside the part of the map the form does not cover, zooming in on a single node or out to
+       fit a whole way, and puts the camera back where it was when the form is closed. See
+       MainActivity.showQuestDetailsOnMap and FocusGeometryMapComponent. Without it the element
+       regularly ends up hidden behind the form, which is a large part of what made splitting a way
+       so awkward here: the way had to be panned back into view by hand first.
+
+       Quests only, including note quests, which Android also focuses. Not the note form, which
+       opens at a position the user has just picked anyway. Overlays are a gap rather than a
+       decision: Android shifts the map for them too, by giving the camera the form's padding
+       (showOverlayElementDetailsOnMap), which moves the element up out from behind the form
+       without changing the target. There is no camera to shift here in the same way, so an
+       overlay element tapped in the lower half of the screen still ends up behind the form. */
+    val questGeometry = when (val sheet = shownBottomSheet) {
+        is ShownBottomSheet.OsmQuest -> sheet.geometry
+        is ShownBottomSheet.OsmNoteQuest -> sheet.geometry
+        else -> null
+    }
+    var cameraBeforeFocus by remember { mutableStateOf<CameraPosition?>(null) }
+    // crosshairOffset, so that a rotation - which changes the free area entirely - re-fits.
+    // Re-firing only ever re-fits: cameraBeforeFocus is captured once, by the guard below.
+    LaunchedEffect(questGeometry, crosshairOffset) {
+        if (questGeometry != null) {
+            // not overwritten if one quest is opened directly after another, as on Android
+            if (cameraBeforeFocus == null) cameraBeforeFocus = cameraState.position
+            cameraState.focusOn(questGeometry, Dimensions.getOpenQuestFormMapPadding(windowInfo))
+        } else {
+            cameraBeforeFocus?.let {
+                // position and zoom only, as endFocusGeometry does - undoing a rotation the user
+                // made while the form was open would be surprising
+                val restored = cameraState.position.copy(target = it.target, zoom = it.zoom)
+                cameraState.animateTo(restored, UNFOCUS_DURATION)
+            }
+            cameraBeforeFocus = null
+        }
+    }
+
+    /* The same for the edit selected in the edit history, except that the camera is deliberately
+       not put back afterwards - Android calls clearFocus there, not endFocus */
+    val selectedEdit by editHistoryViewModel.selectedEdit.collectAsState()
+    LaunchedEffect(selectedEdit) {
+        val edit = selectedEdit ?: return@LaunchedEffect
+        cameraState.focusOn(editHistoryViewModel.getEditGeometry(edit))
+    }
+
     /* MainScreen needs to know where the map is - among other things, it does not show any bottom
        sheet at all while the camera is unknown */
     LaunchedEffect(cameraState.position, cameraState.viewport, crosshairOffset) {
@@ -143,6 +196,7 @@ fun IosMainScreen() {
 
     val isShowingUndoHistory by editHistoryViewModel.isShowingSidebar.collectAsState()
     var shownMarkers by remember { mutableStateOf<Collection<MapMarker>?>(null) }
+    var lastMapClick by remember { mutableStateOf<MapClick?>(null) }
     var lastQuestSolved by remember { mutableStateOf<QuestSolvedEvent?>(null) }
     // the screens that are their own Activity on Android are shown on top of the map here
     var shownScreen by remember { mutableStateOf<FullScreen?>(null) }
@@ -163,6 +217,16 @@ fun IosMainScreen() {
             },
             onClickQuest = { questKey -> mainBottomSheetViewModel.showQuest(questKey) },
             onClickEdit = { editKey -> editHistoryViewModel.select(editKey) },
+            /* exactly what MainActivity.onClickedMapAt does: while a form is open the click is
+               something the form may want to know about, and otherwise it dismisses the edit
+               history, which is the only way to get rid of it apart from the back gesture */
+            onClickMap = { position, clickAreaSizeInMeters ->
+                if (shownBottomSheet != null) {
+                    lastMapClick = MapClick(position, clickAreaSizeInMeters)
+                } else if (isShowingUndoHistory) {
+                    editHistoryViewModel.hideSidebar()
+                }
+            },
             location = null,
             rotation = null,
             shownBottomSheet = shownBottomSheet,
@@ -212,6 +276,7 @@ fun IosMainScreen() {
                 }
             },
             getOffset = { position -> cameraState.screenOffsetOf(position, density) },
+            lastMapClick = lastMapClick,
         )
 
         lastQuestSolved?.let { LastQuestSolvedEffect(it) }
@@ -242,7 +307,7 @@ private enum class FullScreen { Settings, QuestSettings, About, Profile, Login }
 
 /** The area to download for the currently displayed map area, or null if it is not suitable.
  *  Mirrors what MainActivity.getDownloadArea does on Android, minus the toasts. */
-private fun org.maplibre.compose.camera.CameraState.downloadArea(): BoundingBox? {
+private fun CameraState.downloadArea(): BoundingBox? {
     val displayedArea = viewport?.visibleBoundingBox?.toBoundingBox() ?: return null
 
     val enclosingBBox = displayedArea.asBoundingBoxOfEnclosingTiles(ApplicationConstants.DOWNLOAD_TILE_ZOOM)
@@ -263,7 +328,7 @@ private fun org.maplibre.compose.camera.CameraState.downloadArea(): BoundingBox?
 private fun QuestMarker.toMapMarker() =
     MapMarker(geometry = geometry, icon = icon, title = title)
 
-private fun org.maplibre.compose.camera.CameraState.screenOffsetOf(
+private fun CameraState.screenOffsetOf(
     position: LatLon,
     density: androidx.compose.ui.unit.Density,
 ): Offset? {
@@ -289,5 +354,45 @@ private fun PaddingValues.centerOffsetIn(
     return DpOffset(
         x = left + (size.width - left - right) / 2,
         y = top + (size.height - top - bottom) / 2,
+    )
+}
+
+/** How much air to leave around a geometry the map is focused on, as a share of its own size.
+ *
+ *  Android gets its air from fitting the geometry and then zooming out by a further 0.75, which
+ *  leaves the geometry occupying 1/2^0.75 = 59% of the free area however big it is. A share of
+ *  its size reproduces that; a fixed distance would not, and would fit a long way edge to edge. */
+private const val FOCUS_MARGIN_FRACTION = 0.2
+
+/** The least air to leave, for a geometry that is small or - as most quests are - a single point.
+ *
+ *  A point has no size to take a share of, so this is also what decides how far a node is zoomed
+ *  in on. Note this is NOT the equivalent of Android's hard `min(zoom - 0.75, 19.0)` cap: the
+ *  resulting zoom varies with latitude and with the size of the free area, from about 19 at 60
+ *  degrees on a phone to about 20 at the equator, and more again on a tablet. That is a knowingly
+ *  accepted difference - the range is a reasonable one to be in - not an equivalence. */
+private const val MIN_FOCUS_MARGIN_IN_METERS = 20.0
+
+private val FOCUS_DURATION = 450.milliseconds
+private val UNFOCUS_DURATION = 300.milliseconds
+
+/** Moves the camera so that all of [geometry] is visible in the part of the map left over by
+ *  [padding], the way Android's FocusGeometryMapComponent.beginFocusGeometry does.
+ *
+ *  The padding is what puts the geometry under the crosshair rather than in the middle of the
+ *  screen; it is applied while fitting rather than kept on the camera, which is all that is needed
+ *  here and all that MapLibre Compose offers. */
+private suspend fun CameraState.focusOn(
+    geometry: ElementGeometry,
+    padding: PaddingValues = PaddingValues(),
+) {
+    val bounds = geometry.bounds
+    val margin = max(MIN_FOCUS_MARGIN_IN_METERS, bounds.min.distanceTo(bounds.max) * FOCUS_MARGIN_FRACTION)
+    animateTo(
+        boundingBox = bounds.enlargedBy(margin).toGeoJsonBoundingBox(),
+        bearing = position.bearing,
+        tilt = position.tilt,
+        padding = padding,
+        duration = FOCUS_DURATION,
     )
 }
