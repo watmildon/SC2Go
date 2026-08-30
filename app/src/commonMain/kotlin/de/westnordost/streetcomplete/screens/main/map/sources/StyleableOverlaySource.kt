@@ -97,7 +97,6 @@ class StyleableOverlaySource(
     }
 
     fun onMapMoved(cameraState: CameraState) {
-        if (isPaused) return
         // require zoom >= 14, which is the lowest zoom level where quests are shown
         val zoom = cameraState.position.zoom
         if (zoom < 14) return
@@ -110,7 +109,11 @@ class StyleableOverlaySource(
         if (tilesRect.size > 32) return
         val isNewRect = lastDisplayedRect?.contains(tilesRect) != true
         if (!isNewRect) return
-        setStyledElements(tilesRect)
+        /* where the map is is tracked even while paused, and only the fetching is skipped: the
+           camera does move behind the screens drawn over it - following the user's location, say -
+           and resuming refetches for the last rect, which would otherwise be where the map was
+           when it was paused rather than where it is now. */
+        if (!isPaused) setStyledElements(tilesRect)
         lastDisplayedRect = tilesRect
     }
 

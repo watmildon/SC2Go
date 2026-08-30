@@ -52,8 +52,8 @@ abstract class MainMapViewModel : ViewModel() {
 
     abstract fun onMapMoved(cameraState: CameraState)
 
-    /** Call with true while the map is not on screen, so that it stops keeping itself up to date */
-    abstract fun setPaused(paused: Boolean)
+    /** Call with false while the map cannot be seen, so that it stops keeping itself up to date */
+    abstract fun setOnScreen(onScreen: Boolean)
 }
 
 class MainMapViewModelImpl(
@@ -80,8 +80,11 @@ class MainMapViewModelImpl(
     override fun getQuestKey(properties: JsonObject): QuestKey? =
         mapQuestPinsSource.getQuestKey(properties)
 
-    override val editHistoryPins: StateFlow<Collection<Pin>>
-        get() = editHistoryPinsSource
+    /* val, not get(): stateIn builds a new StateFlow each time it is called, and collectAsState
+       keys its collection on the flow instance, so as a getter this restarted collection - and the
+       database read behind it - on every recomposition of the map. */
+    override val editHistoryPins: StateFlow<Collection<Pin>> =
+        editHistoryPinsSource
             .pins
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(), emptyList())
 
@@ -104,7 +107,8 @@ class MainMapViewModelImpl(
         styleableOverlaySource.onMapMoved(cameraState)
     }
 
-    override fun setPaused(paused: Boolean) {
+    override fun setOnScreen(onScreen: Boolean) {
+        val paused = !onScreen
         mapQuestPinsSource.isPaused = paused
         styleableOverlaySource.isPaused = paused
     }

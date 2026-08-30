@@ -69,7 +69,8 @@ import org.maplibre.spatialk.geojson.Position
  * hidden when it is open.
  *
  * @param isOnScreen whether the map can actually be seen, i.e. nothing is drawn over the whole of
- * it. While it cannot, it stops keeping its pins and overlay up to date.
+ * it. While it cannot, the quest pins and the overlay stop keeping themselves up to date. The map
+ * itself carries on rendering, and the edit history pins are not stopped.
  *
  * @param onClickMap called when the user clicked the map itself, i.e. not any pin, overlay element
  * or other thing drawn on top of it. [clickAreaSizeInMeters] is how much ground the user's finger
@@ -143,7 +144,7 @@ fun MainMap(
        not mean building it all over again. It should not be keeping itself up to date while it is
        back there though - that is a database query and a rebuild of every pin in view for a map
        nobody can see, on every change to what is visible. */
-    LaunchedEffect(isOnScreen) { viewModel.setPaused(!isOnScreen) }
+    LaunchedEffect(isOnScreen) { viewModel.setOnScreen(isOnScreen) }
 
     fun zoomToCluster(targetZoom: Double) {
         coroutineScope.launch {
