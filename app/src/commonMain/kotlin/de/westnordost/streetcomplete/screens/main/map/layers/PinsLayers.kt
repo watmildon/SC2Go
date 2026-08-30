@@ -57,6 +57,7 @@ fun PinsLayers(
     pins: Collection<Pin>,
     onClickPin: (properties: JsonObject) -> Unit,
     onZoomToCluster: (targetZoom: Double) -> Unit,
+    visible: Boolean = true,
 ) {
     val coroutineScope = rememberCoroutineScope()
 
@@ -88,6 +89,7 @@ fun PinsLayers(
     SymbolLayer(
         id = PIN_CLUSTER_LAYER,
         source = source,
+        visible = visible,
         minZoom = CLUSTER_MIN_ZOOM.toFloat(),
         maxZoom = CLUSTER_MAX_ZOOM.toFloat(),
         filter = all(
@@ -110,6 +112,7 @@ fun PinsLayers(
     CircleLayer(
         id = "pin-dot-layer",
         source = source,
+        visible = visible,
         minZoom = CLUSTER_MIN_ZOOM.toFloat(),
         filter = any(
             zoom() gt const(CLUSTER_MAX_ZOOM),
@@ -128,6 +131,7 @@ fun PinsLayers(
     SymbolLayer(
         id = PINS_LAYER,
         source = source,
+        visible = visible,
         minZoom = CLUSTER_MAX_ZOOM.toFloat(),
         filter = zoom() gt const(CLUSTER_MAX_ZOOM),
         sortKey = feature["icon-order"].convertToNumber(),

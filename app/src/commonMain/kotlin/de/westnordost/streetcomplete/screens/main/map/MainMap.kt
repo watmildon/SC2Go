@@ -254,13 +254,18 @@ fun MainMap(
                         },
                         onZoomToCluster = ::zoomToCluster
                     )
-                } else if (showQuestPins) {
+                } else {
+                    /* hidden rather than removed: leaving the composition would throw away the
+                       clustered source and every pin image, and opening or closing a form would
+                       then rebuild and re-cluster the lot and re-decode a hundred-odd icons.
+                       Android sets visibility on the layers for the same reason. */
                     PinsLayers(
                         pins = questPins,
                         onClickPin = { properties ->
                             viewModel.getQuestKey(properties)?.let { onClickQuest(it) }
                         },
-                        onZoomToCluster = ::zoomToCluster
+                        onZoomToCluster = ::zoomToCluster,
+                        visible = showQuestPins,
                     )
                 }
 
