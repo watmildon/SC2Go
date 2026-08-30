@@ -14,7 +14,7 @@ import platform.Foundation.NSDateFormatterNoStyle
 
 actual class LocalTimeFormatter actual constructor(
     locale: Locale?,
-    timeZone: TimeZone,
+    private val timeZone: TimeZone,
     style: DateTimeFormatStyle,
 ) {
     private val formatter = NSDateFormatter().also {
@@ -26,7 +26,13 @@ actual class LocalTimeFormatter actual constructor(
 
     actual fun format(time: LocalTime): String {
         val dateTime = LocalDateTime(LocalDate(2000, 1, 1), time)
-        val date = NSCalendar.currentCalendar.dateFromComponents(dateTime.toNSDateComponents())
+        /* the components are a wall clock reading, so they have to be interpreted in the time
+           zone being formatted for. Without this they are read in the device's own zone and the
+           result is out by the difference between the two - nine hours, formatting CET on a
+           machine in California. */
+        val components = dateTime.toNSDateComponents()
+        components.timeZone = timeZone.toNSTimeZone()
+        val date = NSCalendar.currentCalendar.dateFromComponents(components)
             ?: return ""
         return formatter.stringFromDate(date)
     }
