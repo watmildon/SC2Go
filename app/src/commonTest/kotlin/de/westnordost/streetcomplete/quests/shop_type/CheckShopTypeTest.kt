@@ -43,7 +43,7 @@ class CheckShopTypeTest {
     }
 
     // for disused non-disused combo validator see https://josm.openstreetmap.de/ticket/22668#ticket
-    @Test fun `is not applicable to disused shop that is not disused after all, apparently`() {
+    @Test fun `is not applicable to disused shop that is not disused after all - apparently`() {
         assertFalse(questType.isApplicableTo(
             node(
                 tags = mapOf("disused:shop" to "yes", "shop" to "something new already"),
@@ -52,7 +52,7 @@ class CheckShopTypeTest {
         ))
     }
 
-    @Test fun `is not applicable to disused shop that is not disused after all, with well specified alternative`() {
+    @Test fun `is not applicable to disused shop that is not disused after all - with well specified alternative`() {
         assertFalse(questType.isApplicableTo(
             node(
                 tags = mapOf("disused:shop" to "yes", "shop" to "mall"),
@@ -61,7 +61,7 @@ class CheckShopTypeTest {
         ))
     }
 
-    @Test fun `is not applicable to disused shop that is not disused after all, with well specified non-shop alternative`() {
+    @Test fun `is not applicable to disused shop that is not disused after all - with well specified non-shop alternative`() {
         assertFalse(questType.isApplicableTo(
             node(
                 tags = mapOf("disused:shop" to "yes", "amenity" to "clothing_bank"),

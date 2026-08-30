@@ -1,4 +1,7 @@
-package de.westnordost.streetcomplete
+/* Each of these developer scripts keeps its own `main`, so they need their own
+   packages: Kotlin/Native links all of commonTest into one test binary, where two
+   top level `main` functions in the same package are a declaration clash. */
+package de.westnordost.streetcomplete.tools.openinghours
 
 import de.westnordost.osm_opening_hours.model.CalendarDate
 import de.westnordost.osm_opening_hours.model.ClockTime

@@ -5,6 +5,8 @@ import de.westnordost.streetcomplete.util.ktx.containsExactlyInAnyOrder
 import de.westnordost.streetcomplete.util.ktx.nowAsEpochMilliseconds
 import kotlin.test.BeforeTest
 import kotlin.test.Test
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.runBlocking
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
@@ -34,9 +36,10 @@ class DownloadedTilesDaoTest : StreetCompleteDatabaseTestCase() {
         assertTrue(dao.getAll(then).isEmpty())
     }
 
-    @Test fun putSomeOld() {
+    @Test fun putSomeOld() = runBlocking {
         dao.put(r(0, 0, 1, 3))
-        Thread.sleep(2000)
+        // Thread.sleep is JVM only, and this test is in commonTest
+        delay(2000)
         dao.put(r(2, 0, 5, 5))
         val before = nowAsEpochMilliseconds() - 1000
         assertFalse(dao.contains(r(0, 0, 2, 2), before))
