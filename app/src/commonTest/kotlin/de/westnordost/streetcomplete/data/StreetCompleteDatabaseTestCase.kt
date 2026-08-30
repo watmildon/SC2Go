@@ -5,21 +5,32 @@ import androidx.sqlite.driver.bundled.BundledSQLiteDriver
 import kotlinx.io.files.Path
 import kotlinx.io.files.SystemFileSystem
 import kotlin.test.AfterTest
-import kotlin.test.BeforeTest
 
 open class StreetCompleteDatabaseTestCase {
-    protected lateinit var database: Database
-    private lateinit var connection: SQLiteConnection
+    private var connection: SQLiteConnection? = null
+    private var _database: Database? = null
 
-    @BeforeTest fun setUp() {
+    /** Created when it is first asked for, rather than in a `@BeforeTest`.
+     *
+     *  On Kotlin/Native a subclass's `@BeforeTest` runs *before* the one it inherits, the opposite
+     *  way round from JVM. Every test case here builds its DAO from this database in its own
+     *  `@BeforeTest`, so with a `@BeforeTest` here they would all have run against a database that
+     *  did not exist yet - and the failure was hidden, because tearDown then failed too and its
+     *  error is the one reported. Creating it on demand takes the ordering out of it entirely. */
+    protected val database: Database get() = _database ?: run {
         SystemFileSystem.delete(Path(DATABASE_NAME), mustExist = false)
-        connection = BundledSQLiteDriver().open(DATABASE_NAME)
-        database = DatabaseImpl(connection)
-        database.initialize(StreetCompleteDatabaseConfigurator)
+        val newConnection = BundledSQLiteDriver().open(DATABASE_NAME)
+        connection = newConnection
+        DatabaseImpl(newConnection).also {
+            it.initialize(StreetCompleteDatabaseConfigurator)
+            _database = it
+        }
     }
 
     @AfterTest fun tearDown() {
-        connection.close()
+        connection?.close()
+        connection = null
+        _database = null
         SystemFileSystem.delete(Path(DATABASE_NAME), mustExist = false)
     }
 
