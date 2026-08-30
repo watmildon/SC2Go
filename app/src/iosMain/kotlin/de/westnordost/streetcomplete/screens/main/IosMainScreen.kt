@@ -14,6 +14,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
@@ -94,9 +95,9 @@ import org.maplibre.compose.util.ClickResult
 
 /** The real main screen, i.e. the map with all the controls on top of it.
  *
- *  This is the iOS counterpart of what `MainActivity` does on Android. It is deliberately
- *  incomplete: the callbacks that need things that do not work on iOS yet - navigating to the
- *  other screens, recording tracks, the quest-solved animation - do nothing for now. */
+ *  This is the iOS counterpart of what `MainActivity` does on Android, and still incomplete:
+ *  there is no compass, so the location marker has no direction cone and the map cannot be turned
+ *  by pointing the device, and the geometry a form is about is not highlighted on the map. */
 @OptIn(FlowPreview::class)
 @Composable
 fun IosMainScreen() {
@@ -236,9 +237,35 @@ fun IosMainScreen() {
     var displayedLocation by remember { mutableStateOf<Location?>(null) }
     var confirmTurnOnLocation by remember { mutableStateOf(false) }
     var showNoLocation by remember { mutableStateOf(false) }
-    /* where the user has been, most recent last. Only used for the direction of travel in
-       navigation mode so far - it is what Android derives the map rotation from there. */
+    /* Where the user has been since the last break in reception, most recent last, and the
+       stretches before that. Drawn on the map so they can see where they have already been, used
+       for the direction of travel in navigation mode, and handed to a note when recording. */
     val track = remember { mutableStateListOf<Trackpoint>() }
+    val oldTracks = remember { mutableStateListOf<List<Trackpoint>>() }
+    val isRecordingTracks by viewModel.isRecordingTracks.collectAsState()
+
+    /** The end of the track, which is all the direction of travel depends on.
+     *
+     *  getTrackBearing looks for the last point more than 15m back, so when the user is standing
+     *  still - at a crossing, or filling in a form - it finds none and walks the whole list. That
+     *  is a whole day of fixes, on every fix, once the track is no longer bounded. */
+    fun recentTrack(): List<Trackpoint> = track.takeLast(TRACK_BEARING_LOOKBACK)
+
+    /* Keyed on the size because this composable recomposes on every frame the camera moves, and
+       these would otherwise rebuild the whole day's path each time. Points are only ever appended,
+       and starting a new stretch always changes both sizes. */
+    val trackPositions = remember(track.size) { track.map { it.position } }
+    val oldTrackPositions = remember(oldTracks.size) {
+        oldTracks.map { stretch -> stretch.map { it.position } }
+    }
+
+    /** Ends the current stretch of track and starts a new one, as on a break in reception or when
+     *  recording starts or stops. */
+    fun startNewTrack() {
+        if (track.isNotEmpty()) oldTracks.add(track.toList())
+        track.clear()
+    }
+
     /* the first fix zooms in if the map is zoomed far out, but only the first, so that the user
        can zoom out again afterwards without it being undone */
     var hasZoomedToLocation by remember { mutableStateOf(false) }
@@ -262,7 +289,7 @@ fun IosMainScreen() {
         cameraState.animateTo(
             current.copy(
                 target = position.toPosition(),
-                bearing = if (navigating) getTrackBearing(track) ?: current.bearing else current.bearing,
+                bearing = if (navigating) getTrackBearing(recentTrack()) ?: current.bearing else current.bearing,
                 tilt = if (navigating) NAVIGATION_MODE_TILT else current.tilt,
                 zoom = zoom,
             ),
@@ -330,12 +357,20 @@ fun IosMainScreen() {
                         /* after a gap - backgrounded, or no reception - the previous points say
                            nothing about which way the user is going now, and taking a bearing
                            across the gap would turn the map to a heading they are not travelling.
-                           Android starts a new track segment here; this track only exists for the
-                           bearing, so dropping it is the same thing. */
+                           So start a new stretch, as Android does - but never while recording, or
+                           the track attached to the note would be cut down to whatever came
+                           after the gap. */
                         val last = track.lastOrNull()
-                        if (last != null && now - last.time > MAX_TIME_BETWEEN_LOCATIONS) track.clear()
+                        if (last != null &&
+                            !viewModel.isRecordingTracks.value &&
+                            now - last.time > MAX_TIME_BETWEEN_LOCATIONS
+                        ) {
+                            startNewTrack()
+                        }
+                        /* elevation 0: the shared Location type has no altitude, so it is dropped in
+                           toLocation() before it gets here. Every <ele> in an uploaded trace will
+                           be 0.0 until that type carries it. */
                         track.add(Trackpoint(location.position, now, location.accuracy, 0f))
-                        if (track.size > MAX_TRACK_LENGTH) track.removeFirst()
                     }
                     /* read through the flows rather than the captured values: this collector
                        outlives any one composition. Following is suspended while a form or the
@@ -349,15 +384,25 @@ fun IosMainScreen() {
                     displayedLocation = null
                     // through the setter, so the map also untilts and the preference follows
                     if (viewModel.isNavigationMode.value) setIsNavigationMode(false)
-                    track.clear()
+                    /* not while recording: the stretch would be drawn as an old track, greyed
+                       out, while the stop button is still showing and the recording still
+                       running. The gap is not split while recording either, for the same reason */
+                    if (!viewModel.isRecordingTracks.value) startNewTrack()
                 }
             }
         }
         }
     }
 
-    // so that the pointer pin knows where to point when the location is off screen
-    LaunchedEffect(displayedLocation, cameraState.position, cameraState.viewport) {
+    /* so that the move node form can draw its arrow at the node - MainActivity keeps this up to
+       date in updateBottomSheetElementPosition */
+    /* Both of these are offsets from the top left of the map, where what wants them expects
+       offsets from the top left of the window - the same thing only because the map fills the
+       window, as noted above. SideEffect rather than LaunchedEffect: they are plain writes, and
+       this runs on every frame the camera moves. */
+    SideEffect {
+        mainBottomSheetViewModel.geometryOffsetInWindow.value =
+            shownBottomSheet?.position?.let { cameraState.screenOffsetOf(it, density) }
         viewModel.displayedPosition.value =
             displayedLocation?.let { cameraState.screenOffsetOf(it.position, density) }
     }
@@ -378,6 +423,27 @@ fun IosMainScreen() {
             /* stop wherever the camera is first: moveTo works out where to go by asking the map
                where the position currently is on screen, which is meaningless mid-animation, and
                following may well have one running */
+            cameraState.animateTo(cameraState.position, Duration.ZERO)
+            cameraState.moveTo(position, formCrosshairOffset, windowInfo.containerDpSize)
+        }
+    }
+
+    fun startTrackRecording() {
+        startNewTrack()
+        viewModel.isRecordingTracks.value = true
+    }
+
+    fun stopTrackRecording() {
+        /* Before anything is changed. Stopping opens a note with the track attached - that is the
+           whole point of recording one - and with no fix there is nowhere to put the note, so
+           there is nothing to do but keep recording. Android stops anyway and loses the track,
+           which is worst exactly when it is most likely: no fix is why reception was lost. */
+        val position = displayedLocation?.position ?: return
+        viewModel.isRecordingTracks.value = false
+        val recorded = track.toList()
+        startNewTrack()
+        mainBottomSheetViewModel.showCreateNote(recorded.takeIf { it.isNotEmpty() })
+        scope.launch {
             cameraState.animateTo(cameraState.position, Duration.ZERO)
             cameraState.moveTo(position, formCrosshairOffset, windowInfo.containerDpSize)
         }
@@ -415,6 +481,9 @@ fun IosMainScreen() {
             shownBottomSheet = shownBottomSheet,
             shownMarkers = shownMarkers,
             isShowingUndoHistorySidebar = isShowingUndoHistory,
+            trackpoints = trackPositions,
+            oldTrackpointsLists = oldTrackPositions,
+            isRecordingTracks = isRecordingTracks,
             onMapLongClick = { position, offset ->
                 /* not while a form or the edit history is open, as MainActivity.onLongPress also
                    refuses: creating a note from here replaces whatever is open, throwing away
@@ -469,7 +538,7 @@ fun IosMainScreen() {
             },
             onClickLocationPointer = { setIsFollowingPosition(true) },
             onClickCreate = { mainBottomSheetViewModel.showCreateNote(null) },
-            onClickStopTrackRecording = { },
+            onClickStopTrackRecording = { stopTrackRecording() },
             onDownload = { viewModel.download(cameraState.downloadArea() ?: return@MainScreen) },
             onClickSettings = { shownScreen = FullScreen.Settings },
             onClickQuestSettings = { shownScreen = FullScreen.QuestSettings },
@@ -493,8 +562,8 @@ fun IosMainScreen() {
             expanded = showMapContextMenu,
             onDismissRequest = { showMapContextMenu = false },
             onClickCreateNote = { lastMapLongPress?.let { (_, position) -> createNoteAt(position) } },
-            onClickCreateTrack = { /* recording tracks does not work on iOS yet */ },
-            isCreateTrackAvailable = false,
+            onClickCreateTrack = { startTrackRecording() },
+            isCreateTrackAvailable = true,
             onClickOpenLocation = {
                 lastMapLongPress?.let { (_, position) ->
                     mapAppLauncher.openAt(position, cameraState.position.zoom)
@@ -685,9 +754,8 @@ private const val NAVIGATION_MODE_TILT = 60.0
 /** Fixes less precise than this are not put on the track, as on Android */
 private const val MIN_TRACK_ACCURACY = 20f
 
-/** Only the recent part of the track is kept - it is only used to work out which way the user is
- *  going. Recording a track to attach to a note keeps its own, complete list. */
-private const val MAX_TRACK_LENGTH = 200
+/** How many fixes back the direction of travel is worked out from */
+private const val TRACK_BEARING_LOOKBACK = 200
 
 /** A longer gap than this between fixes starts the track over, as on Android */
 private const val MAX_TIME_BETWEEN_LOCATIONS = 60L * 1000

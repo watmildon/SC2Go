@@ -5,7 +5,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
-import com.charleskorn.kaml.YamlPathSegment.Root.location
 import de.westnordost.streetcomplete.data.osm.mapdata.LatLon
 import de.westnordost.streetcomplete.resources.*
 import de.westnordost.streetcomplete.screens.main.map.animateLatLonAsState
@@ -41,9 +40,12 @@ fun TracksLayers(
         if (trackpoints.size > 1) trackpoints.take(trackpoints.size - 1) else emptyList()
     }
 
-    val tracksSource = rememberGeoJsonSource(
-        data = GeoJsonData.Features(trackWithoutLast.toLineGeometry() ?: GeometryCollection(emptyList()))
-    )
+    /* inside the remember: this recomposes on every frame the camera moves, and building the
+       geometry allocates a Position per point of the whole track each time */
+    val tracksGeometry = remember(trackWithoutLast) {
+        trackWithoutLast.toLineGeometry() ?: GeometryCollection(emptyList())
+    }
+    val tracksSource = rememberGeoJsonSource(data = GeoJsonData.Features(tracksGeometry))
     // we want to animate the drawing of the track from the last position to the current position
     // while the position marker animates at the same time from the last position to the current
     // position (see CurrentLocationLayers)
@@ -57,9 +59,10 @@ fun TracksLayers(
     )
 
     // old tracks are expected to not update so often
-    val oldTracksSource = rememberGeoJsonSource(
-        data = GeoJsonData.Features(oldTrackpointsLists.toMultiLineGeometry())
-    )
+    val oldTracksGeometry = remember(oldTrackpointsLists) {
+        oldTrackpointsLists.toMultiLineGeometry()
+    }
+    val oldTracksSource = rememberGeoJsonSource(data = GeoJsonData.Features(oldTracksGeometry))
 
     // old tracks are drawn with less alpha so the map stays well visible
     TracksLayer(

@@ -32,6 +32,7 @@ import de.westnordost.streetcomplete.screens.main.map.layers.StyleableOverlayLab
 import de.westnordost.streetcomplete.screens.main.map.layers.STYLEABLE_OVERLAY_CLICKABLE_LAYERS
 import de.westnordost.streetcomplete.screens.main.map.layers.StyleableOverlayLayers
 import de.westnordost.streetcomplete.screens.main.map.layers.StyleableOverlaySideLayer
+import de.westnordost.streetcomplete.screens.main.map.layers.TracksLayers
 import de.westnordost.streetcomplete.screens.main.map.layers.overlayIcons
 import de.westnordost.streetcomplete.screens.main.map.layers.toGeoJsonFeatures
 import kotlinx.coroutines.launch
@@ -70,6 +71,11 @@ import org.maplibre.spatialk.geojson.Position
  * @param onClickMap called when the user clicked the map itself, i.e. not any pin, overlay element
  * or other thing drawn on top of it. [clickAreaSizeInMeters] is how much ground the user's finger
  * covered, so that what was clicked "near enough" can be worked out.
+ *
+ * @param trackpoints where the user has been since the last break in reception, and
+ * [oldTrackpointsLists] the stretches before that. Drawn so the user can see where they have
+ * already been. [isRecordingTracks] draws the current one differently, as it is being recorded to
+ * attach to a note.
  * */
 @Composable
 fun MainMap(
@@ -81,6 +87,9 @@ fun MainMap(
     shownBottomSheet: ShownBottomSheet?,
     shownMarkers: Collection<Marker>?,
     isShowingUndoHistorySidebar: Boolean,
+    trackpoints: List<LatLon>,
+    oldTrackpointsLists: List<List<LatLon>>,
+    isRecordingTracks: Boolean,
     modifier: Modifier = Modifier,
     onClickMap: (position: LatLon, clickAreaSizeInMeters: Double) -> Unit = { _, _ -> },
     onMapLongClick: MapClickHandler = { _, _ -> ClickResult.Pass },
@@ -192,7 +201,7 @@ fun MainMap(
                         }
                     )
                 }
-                //TODO TracksLayers(trackpoints, isRecording, oldTrackpointsLists)
+                TracksLayers(trackpoints, isRecordingTracks, oldTrackpointsLists)
             },
             aboveLabelsContent = {
                 // these are always on top of everything else (including labels)
