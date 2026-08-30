@@ -2,6 +2,7 @@ package de.westnordost.streetcomplete.screens.main.map.layers
 
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.graphics.Color
@@ -62,6 +63,26 @@ fun PinsLayers(
     val coroutineScope = rememberCoroutineScope()
 
     val pinIcons = remember(pins) { pins.map { it.icon }.distinct() }
+
+    /* Keyed on the icon rather than positionally: pinIcons grows as new kinds of quest come into
+       view while panning, and a positional remember would shift every slot after the new one and
+       reload all of those painters. */
+    val pinPainters = pinIcons.map { icon -> key(icon) { pinPainter(painterResource(icon)) } }
+    val fallbackPainter = pinPainter(painterResource(Res.drawable.quest_create_note))
+
+    /* Remembered on the icons, not rebuilt with every change to the pins. Panning changes the pins
+       constantly while the set of icon *kinds* barely moves, and building this costs tens of
+       milliseconds on the main thread - it is one case per distinct icon, which is what
+       maplibre-compose#468 forces (see below). That was the panning stutter. */
+    val iconImage = remember(pinIcons, pinPainters, fallbackPainter) {
+        switch(
+            feature["icon-image"].convertToString(),
+            *pinIcons.mapIndexed { i, icon ->
+                case("pin_" + icon.id, image(pinPainters[i]))
+            }.toTypedArray(),
+            fallback = image(fallbackPainter),
+        )
+    }
 
     val source = rememberGeoJsonSource(
         data = GeoJsonData.Features(FeatureCollection(pins.map { it.toGeoJsonFeature() })),
@@ -141,13 +162,7 @@ fun PinsLayers(
            https://github.com/maplibre/maplibre-compose/issues/468 and #18.
            So instead, declare every pin icon that is currently displayed as its own case, which
            is what makes MapLibre-Compose load them. */
-        iconImage = switch(
-            feature["icon-image"].convertToString(),
-            *pinIcons.map { icon ->
-                case("pin_" + icon.id, image(pinPainter(painterResource(icon))))
-            }.toTypedArray(),
-            fallback = image(pinPainter(painterResource(Res.drawable.quest_create_note))),
-        ),
+        iconImage = iconImage,
         // constant icon size because click area would become a bit too small and more
         // importantly, dynamic size per zoom + collision doesn't work together well, it
         // results in a lot of flickering.

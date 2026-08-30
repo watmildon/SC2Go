@@ -1,6 +1,8 @@
 package de.westnordost.streetcomplete.screens.main.map.layers
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.key
+import androidx.compose.runtime.remember
 import org.jetbrains.compose.resources.DrawableResource
 import org.jetbrains.compose.resources.painterResource
 import de.westnordost.streetcomplete.ui.ktx.id
@@ -55,6 +57,26 @@ fun StyleableOverlayLabelLayer(
     haloColor: Color,
     onClickElement: (properties: JsonObject) -> Unit,
 ) {
+    /* Keyed on the icon, not positional: the set grows as new kinds of element come into view
+       while panning, and a positional remember would shift every slot after the new one. */
+    val iconPainters = icons.map { icon -> key(icon) { painterResource(icon) } }
+
+    /* Remembered on the icons rather than rebuilt whenever the elements change. Panning changes
+       the elements constantly while the set of icon *kinds* barely moves, and this is one case per
+       distinct icon - which is what maplibre-compose#468 forces - so it costs tens of milliseconds
+       on the main thread each time it is built. */
+    val iconImage = remember(icons, iconPainters) {
+        switch(
+            feature["icon"].convertToString(),
+            *icons.mapIndexed { i, icon ->
+                // drawn as SDF because these icons are tinted with iconColor
+                case(icon.id.orEmpty(), image(iconPainters[i], drawAsSdf = true))
+            }.toTypedArray(),
+            // elements without an icon: resolves to no image, same as before
+            fallback = image(feature["icon"].convertToString()),
+        )
+    }
+
     SymbolLayer(
         id = OVERLAY_SYMBOLS_LAYER,
         source = source,
@@ -64,15 +86,7 @@ fun StyleableOverlayLabelLayer(
         /* same as for the pins: images can only be referred to by name if they are already in
            the style, so each displayed icon must be declared as its own case to get it loaded.
            See https://github.com/maplibre/maplibre-compose/issues/468 */
-        iconImage = switch(
-            feature["icon"].convertToString(),
-            *icons.map { icon ->
-                // drawn as SDF because these icons are tinted with iconColor
-                case(icon.id.orEmpty(), image(painterResource(icon), drawAsSdf = true))
-            }.toTypedArray(),
-            // elements without an icon: resolves to no image, same as before
-            fallback = image(feature["icon"].convertToString()),
-        ),
+        iconImage = iconImage,
         iconSize = byZoom(17 to 0.5f, 19 to 1f),
         iconColor = const(color),
         iconHaloColor = const(haloColor),
