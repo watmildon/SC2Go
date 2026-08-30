@@ -83,7 +83,7 @@ fun MainMap(
     onClickQuest: (QuestKey) -> Unit,
     onClickEdit: (EditKey) -> Unit,
     location: Location?,
-    rotation: Float?,
+    rotation: () -> Float?,
     shownBottomSheet: ShownBottomSheet?,
     shownMarkers: Collection<Marker>?,
     isShowingUndoHistorySidebar: Boolean,
@@ -105,11 +105,29 @@ fun MainMap(
     val questPins by viewModel.questPins.collectAsState()
 
     // because quests highlight additional information and history sidebar should feel clean
-    val showOverlay = shownBottomSheet !is ShownBottomSheet.OsmQuest && !isShowingUndoHistorySidebar
+    val showOverlay = shownBottomSheet !is ShownBottomSheet.OsmQuest &&
+        shownBottomSheet !is ShownBottomSheet.OsmNoteQuest &&
+        !isShowingUndoHistorySidebar
+
+    /* While a form is about something on the map, only that thing is shown - everything else would
+       just be in the way of looking at it. What the form is about is drawn by SelectedPinsLayer
+       below, so this hides the rest. The note form is the exception: it is not about anything that
+       is on the map yet. Android does the same in hideNonHighlightedPins. */
+    val showQuestPins = shownBottomSheet == null || shownBottomSheet is ShownBottomSheet.CreateOsmNote
 
     val selectedQuest = when (shownBottomSheet) {
         is ShownBottomSheet.OsmNoteQuest -> shownBottomSheet.quest
         is ShownBottomSheet.OsmQuest -> shownBottomSheet.quest
+        else -> null
+    }
+
+    /* The big pin marking what the form is about, which is the other half of hiding the rest of
+       them. Android highlights the overlay's own icon at the element for an overlay form, which
+       is not a quest and so is not covered by selectedQuest. */
+    val selectedPin = when {
+        selectedQuest != null -> selectedQuest.type.icon to selectedQuest.markerLocations
+        shownBottomSheet is ShownBottomSheet.Overlay && shownBottomSheet.geometry != null ->
+            shownBottomSheet.overlay.icon to listOf(shownBottomSheet.geometry.center)
         else -> null
     }
 
@@ -224,7 +242,7 @@ fun MainMap(
                 }
 
                 if (location != null) {
-                    CurrentLocationLayers(location = location, rotation = rotation)
+                    CurrentLocationLayers(location = location, rotation = rotation())
                 }
 
                 // normal quest pins are not shown while edit history sidebar is open
@@ -236,7 +254,7 @@ fun MainMap(
                         },
                         onZoomToCluster = ::zoomToCluster
                     )
-                } else {
+                } else if (showQuestPins) {
                     PinsLayers(
                         pins = questPins,
                         onClickPin = { properties ->
@@ -246,8 +264,8 @@ fun MainMap(
                     )
                 }
 
-                if (selectedQuest != null) {
-                    SelectedPinsLayer(selectedQuest.type.icon, selectedQuest.markerLocations)
+                selectedPin?.let { (icon, locations) ->
+                    SelectedPinsLayer(icon, locations)
                 }
             }
         )

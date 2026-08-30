@@ -336,10 +336,12 @@ class MainMapFragment : MapFragment() {
     }
 
     private fun onCompassRotationChanged(orientation: Orientation?) {
+        /* North.clockwiseRotationTo(bearing) and not the other way round: clockwiseRotationTo is
+           (argument - receiver), so putting north second negates the heading and mirrors the cone */
         val rotation = orientation
             ?.orientation
             ?.value
-            ?.clockwiseRotationTo(Bearing.North)
+            ?.let { Bearing.North.clockwiseRotationTo(it) }
             ?.toDouble(DMS.Degrees)
         locationMapComponent?.targetRotation = rotation?.let { rotation - (map?.camera?.rotation ?: 0.0) }?.toFloat()
     }

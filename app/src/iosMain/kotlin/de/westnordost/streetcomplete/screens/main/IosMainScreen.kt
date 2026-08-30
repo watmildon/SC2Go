@@ -10,11 +10,11 @@ import androidx.compose.material.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
@@ -91,13 +91,15 @@ import org.maplibre.compose.location.LocationProvider
 import org.maplibre.compose.location.LocationRequest
 import org.maplibre.compose.location.LocationUnavailableReason
 import org.maplibre.compose.location.SystemSettingsLauncher
+import org.maplibre.compose.location.rememberDefaultOrientationProvider
 import org.maplibre.compose.util.ClickResult
+import org.maplibre.spatialk.units.Bearing
+import org.maplibre.spatialk.units.DMS
 
 /** The real main screen, i.e. the map with all the controls on top of it.
  *
- *  This is the iOS counterpart of what `MainActivity` does on Android, and still incomplete:
- *  there is no compass, so the location marker has no direction cone and the map cannot be turned
- *  by pointing the device, and the geometry a form is about is not highlighted on the map. */
+ *  This is the iOS counterpart of what `MainActivity` does on Android. Still missing from it:
+ *  the big pin marking the overlay element or the edit a form is about. */
 @OptIn(FlowPreview::class)
 @Composable
 fun IosMainScreen() {
@@ -232,6 +234,20 @@ fun IosMainScreen() {
     /* ------------------------------------ location ------------------------------------ */
 
     val systemSettingsLauncher: SystemSettingsLauncher = koinInject()
+
+    /* Which way the device is pointing, clockwise from north, for the cone on the location marker.
+       North.clockwiseRotationTo(bearing) and not the other way round: clockwiseRotationTo is
+       (argument - receiver), so putting north second negates the heading and mirrors the cone. */
+    val orientationProvider = rememberDefaultOrientationProvider(COMPASS_UPDATE_INTERVAL)
+    var deviceBearing by remember { mutableStateOf<Double?>(null) }
+    LaunchedEffect(orientationProvider, lifecycleOwner) {
+        lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+            orientationProvider.orientation.collect { orientation ->
+                deviceBearing = orientation?.orientation?.value
+                    ?.let { Bearing.North.clockwiseRotationTo(it).toDouble(DMS.Degrees) }
+            }
+        }
+    }
     val isFollowingPosition by viewModel.isFollowingPosition.collectAsState()
     val isNavigationMode by viewModel.isNavigationMode.collectAsState()
     var displayedLocation by remember { mutableStateOf<Location?>(null) }
@@ -476,8 +492,10 @@ fun IosMainScreen() {
                 }
             },
             location = displayedLocation,
-            // no compass yet, so no direction cone on the location dot
-            rotation = null,
+            /* a lambda so that the compass, which reports up to 30 times a second, recomposes the
+               map's location layers rather than this whole screen. The map's own bearing comes
+               off because the cone is rotated against the screen, not against the map. */
+            rotation = { deviceBearing?.let { (it - cameraState.position.bearing).toFloat() } },
             shownBottomSheet = shownBottomSheet,
             shownMarkers = shownMarkers,
             isShowingUndoHistorySidebar = isShowingUndoHistory,
@@ -747,6 +765,10 @@ private suspend fun CameraState.moveTo(
 }
 
 
+
+/** The most often the compass is sampled. The same as Android's. It is a ceiling on an already
+ *  running stream, not a rate the hardware is asked for, and a still device reports nothing. */
+private val COMPASS_UPDATE_INTERVAL = 33.milliseconds
 
 /** How far the map is tilted when it turns in the direction the user is going, as on Android */
 private const val NAVIGATION_MODE_TILT = 60.0
