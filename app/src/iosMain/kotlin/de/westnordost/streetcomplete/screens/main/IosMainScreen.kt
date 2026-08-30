@@ -502,6 +502,7 @@ fun IosMainScreen() {
             trackpoints = trackPositions,
             oldTrackpointsLists = oldTrackPositions,
             isRecordingTracks = isRecordingTracks,
+            isOnScreen = shownScreen == null,
             onMapLongClick = { position, offset ->
                 /* not while a form or the edit history is open, as MainActivity.onLongPress also
                    refuses: creating a note from here replaces whatever is open, throwing away

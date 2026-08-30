@@ -68,6 +68,9 @@ import org.maplibre.spatialk.geojson.Position
  * @param isShowingUndoHistorySidebar whether the undo history sidebar is open. The overlay is
  * hidden when it is open.
  *
+ * @param isOnScreen whether the map can actually be seen, i.e. nothing is drawn over the whole of
+ * it. While it cannot, it stops keeping its pins and overlay up to date.
+ *
  * @param onClickMap called when the user clicked the map itself, i.e. not any pin, overlay element
  * or other thing drawn on top of it. [clickAreaSizeInMeters] is how much ground the user's finger
  * covered, so that what was clicked "near enough" can be worked out.
@@ -93,6 +96,7 @@ fun MainMap(
     modifier: Modifier = Modifier,
     onClickMap: (position: LatLon, clickAreaSizeInMeters: Double) -> Unit = { _, _ -> },
     onMapLongClick: MapClickHandler = { _, _ -> ClickResult.Pass },
+    isOnScreen: Boolean = true,
     viewModel: MainMapViewModel = koinViewModel(),
     cameraState: CameraState = rememberCameraState(),
     styleState: StyleState = rememberStyleState(),
@@ -134,6 +138,12 @@ fun MainMap(
     LaunchedEffect(cameraState.position) {
         viewModel.onMapMoved(cameraState)
     }
+
+    /* The map stays composed behind the screens drawn on top of it, so that coming back to it does
+       not mean building it all over again. It should not be keeping itself up to date while it is
+       back there though - that is a database query and a rebuild of every pin in view for a map
+       nobody can see, on every change to what is visible. */
+    LaunchedEffect(isOnScreen) { viewModel.setPaused(!isOnScreen) }
 
     fun zoomToCluster(targetZoom: Double) {
         coroutineScope.launch {

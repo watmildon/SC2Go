@@ -71,6 +71,21 @@ class StyleableOverlaySource(
         }
     }
 
+    /** Stops doing any work while what displays these elements is not on screen. See
+     *  [MapQuestPinsSource.isPaused], which this mirrors. */
+    var isPaused: Boolean = false
+        set(value) {
+            if (field == value) return
+            field = value
+            if (value) {
+                viewLifecycleScope.coroutineContext.cancelChildren()
+                selectedOverlaySource.removeListener(selectedOverlayListener)
+            } else {
+                selectedOverlaySource.addListener(selectedOverlayListener)
+                updateSelectedOverlay()
+            }
+        }
+
     init {
         updateSelectedOverlay()
         selectedOverlaySource.addListener(selectedOverlayListener)
@@ -82,6 +97,7 @@ class StyleableOverlaySource(
     }
 
     fun onMapMoved(cameraState: CameraState) {
+        if (isPaused) return
         // require zoom >= 14, which is the lowest zoom level where quests are shown
         val zoom = cameraState.position.zoom
         if (zoom < 14) return

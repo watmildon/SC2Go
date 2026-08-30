@@ -36,9 +36,6 @@ import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.long
 import org.maplibre.compose.camera.CameraState
 
-// TODO the issue with this construct is that it also pushes new updates while the layer that
-//      displays this is not actually visible
-
 class MapQuestPinsSource(
     private val questTypeOrderSource: QuestTypeOrderSource,
     private val questTypeRegistry: QuestTypeRegistry,
@@ -88,6 +85,29 @@ class MapQuestPinsSource(
         }
     }
 
+    /** Stops doing any work while what displays these pins is not on screen.
+     *
+     *  Every change to which quests are visible - each tick of a checkbox in the quest settings,
+     *  say - otherwise costs a database query and a rebuild of every pin in view, for a map that
+     *  nobody can see. Unlike hiding the pins, this keeps the ones already worked out, so coming
+     *  back is free rather than a full rebuild; one refresh on resume covers whatever changed in
+     *  the meantime. */
+    var isPaused: Boolean = false
+        set(value) {
+            if (field == value) return
+            field = value
+            if (value) {
+                viewLifecycleScope.coroutineContext.cancelChildren()
+                visibleQuestsSource.removeListener(visibleQuestsListener)
+                questTypeOrderSource.removeListener(questTypeOrderListener)
+            } else {
+                visibleQuestsSource.addListener(visibleQuestsListener)
+                questTypeOrderSource.addListener(questTypeOrderListener)
+                initializeQuestTypeOrders()
+                invalidate()
+            }
+        }
+
     init {
         initializeQuestTypeOrders()
         visibleQuestsSource.addListener(visibleQuestsListener)
@@ -104,6 +124,7 @@ class MapQuestPinsSource(
         properties.toQuestKey()
 
     fun onMapMoved(cameraState: CameraState) {
+        if (isPaused) return
         // require zoom >= 14, which is the lowest zoom level where quests are shown
         val zoom = cameraState.position.zoom
         if (zoom < 14) return

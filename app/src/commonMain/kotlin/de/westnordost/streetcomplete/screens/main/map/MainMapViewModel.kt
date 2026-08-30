@@ -51,6 +51,9 @@ abstract class MainMapViewModel : ViewModel() {
     abstract fun getElementKey(properties: JsonObject): ElementKey?
 
     abstract fun onMapMoved(cameraState: CameraState)
+
+    /** Call with true while the map is not on screen, so that it stops keeping itself up to date */
+    abstract fun setPaused(paused: Boolean)
 }
 
 class MainMapViewModelImpl(
@@ -99,6 +102,11 @@ class MainMapViewModelImpl(
     override fun onMapMoved(cameraState: CameraState) {
         mapQuestPinsSource.onMapMoved(cameraState)
         styleableOverlaySource.onMapMoved(cameraState)
+    }
+
+    override fun setPaused(paused: Boolean) {
+        mapQuestPinsSource.isPaused = paused
+        styleableOverlaySource.isPaused = paused
     }
 
     private suspend fun getDownloadedTiles() = withContext(Dispatchers.IO) {
