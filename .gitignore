@@ -27,3 +27,6 @@ xcuserdata
 
 # local iOS-port research + notes, not for upstream
 /research/
+
+# local dev helpers for driving the simulator, not for upstream
+/.scripts/
