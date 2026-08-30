@@ -152,7 +152,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "if [ \"YES\" = \"$OVERRIDE_KOTLIN_BUILD_IDE_SUPPORTED\" ]; then\n  echo \"Skipping Gradle build task invocation due to OVERRIDE_KOTLIN_BUILD_IDE_SUPPORTED environment variable set to \\\"YES\\\"\"\n  exit 0\nfi\ncd \"$SRCROOT/..\"\n./gradlew :app:embedAndSignAppleFrameworkForXcode\n";
+			shellScript = "if [ \"YES\" = \"$OVERRIDE_KOTLIN_BUILD_IDE_SUPPORTED\" ]; then\n  echo \"Skipping Gradle build task invocation due to OVERRIDE_KOTLIN_BUILD_IDE_SUPPORTED environment variable set to \\\"YES\\\"\"\n  exit 0\nfi\ncd \"$SRCROOT/..\"\n# so that BuildConfig.DEBUG matches the Xcode configuration, which is what gates the\n# debug-only screens - Show Quest Forms and Show Map - in the settings\nif [ \"$CONFIGURATION\" = \"Debug\" ]; then\n  DEBUG_FLAG=\"-Papp.streetcomplete.debug=true\"\nelse\n  DEBUG_FLAG=\"-Papp.streetcomplete.debug=false\"\nfi\n./gradlew :app:embedAndSignAppleFrameworkForXcode \"$DEBUG_FLAG\"\n";
 		};
 /* End PBXShellScriptBuildPhase section */
 
