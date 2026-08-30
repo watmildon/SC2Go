@@ -16,6 +16,7 @@ fun MapContextMenu(
     onDismissRequest: () -> Unit,
     onClickCreateNote: () -> Unit,
     onClickCreateTrack: () -> Unit,
+    isCreateTrackAvailable: Boolean,
     onClickOpenLocation: () -> Unit,
     isOpenLocationAvailable: Boolean,
     modifier: Modifier = Modifier,
@@ -30,8 +31,10 @@ fun MapContextMenu(
         DropdownMenuItem(onClick = { onDismissRequest(); onClickCreateNote() }) {
             Text(stringResource(Res.string.map_btn_create_note))
         }
-        DropdownMenuItem(onClick = { onDismissRequest(); onClickCreateTrack() }) {
-            Text(stringResource(Res.string.map_btn_create_track))
+        if (isCreateTrackAvailable) {
+            DropdownMenuItem(onClick = { onDismissRequest(); onClickCreateTrack() }) {
+                Text(stringResource(Res.string.map_btn_create_track))
+            }
         }
         if (isOpenLocationAvailable) {
             DropdownMenuItem(onClick = { onDismissRequest(); onClickOpenLocation() }) {

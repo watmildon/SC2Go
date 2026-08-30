@@ -255,6 +255,7 @@ class MainActivity :
                 onDismissRequest = { showMapContextMenu.value = false },
                 onClickCreateNote = { lastLongPressPosition?.let { onClickCreateNote(it) } },
                 onClickCreateTrack = { onClickCreateTrack() },
+                isCreateTrackAvailable = true,
                 isOpenLocationAvailable = isMapAppLaunchAvailable,
                 onClickOpenLocation = {
                     if (lastLongPressPosition != null) {

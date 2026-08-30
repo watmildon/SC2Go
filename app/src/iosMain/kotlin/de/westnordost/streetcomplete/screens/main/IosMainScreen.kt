@@ -4,15 +4,20 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.calculateEndPadding
 import androidx.compose.foundation.layout.calculateStartPadding
-import androidx.compose.material.Surface
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material.Surface
+import androidx.compose.material.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.platform.LocalDensity
@@ -21,59 +26,78 @@ import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.LayoutDirection
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.repeatOnLifecycle
 import de.westnordost.streetcomplete.ApplicationConstants
 import de.westnordost.streetcomplete.data.download.tiles.asBoundingBoxOfEnclosingTiles
+import de.westnordost.streetcomplete.data.location.Location
+import de.westnordost.streetcomplete.data.location.SurveyChecker
 import de.westnordost.streetcomplete.data.osm.geometry.ElementGeometry
 import de.westnordost.streetcomplete.data.osm.mapdata.BoundingBox
 import de.westnordost.streetcomplete.data.osm.mapdata.LatLon
+import de.westnordost.streetcomplete.data.osmtracks.Trackpoint
 import de.westnordost.streetcomplete.data.preferences.Preferences
 import de.westnordost.streetcomplete.data.quest.AutoSyncer
-import kotlinx.coroutines.flow.first
-import org.maplibre.compose.location.LocationAccuracy
-import org.maplibre.compose.location.LocationEvent
-import org.maplibre.compose.location.LocationProvider
-import org.maplibre.compose.location.LocationRequest
-import org.maplibre.spatialk.units.extensions.meters
-import kotlin.time.Duration.Companion.milliseconds
-import kotlin.time.Duration.Companion.seconds
+import de.westnordost.streetcomplete.resources.Res
+import de.westnordost.streetcomplete.resources.create_new_note_unprecise
+import de.westnordost.streetcomplete.resources.no_gps_no_quests
+import de.westnordost.streetcomplete.resources.turn_on_location_request
+import de.westnordost.streetcomplete.screens.about.AboutNavHost
+import de.westnordost.streetcomplete.screens.main.controls.LocationState
+import de.westnordost.streetcomplete.screens.main.edithistory.EditHistoryViewModel
+import de.westnordost.streetcomplete.screens.main.map.MainMap
+import de.westnordost.streetcomplete.screens.main.map.getTrackBearing
+import de.westnordost.streetcomplete.screens.main.map.layers.Marker as MapMarker
+import de.westnordost.streetcomplete.screens.main.map.maplibre.CameraPosition as MapCameraPosition
 import de.westnordost.streetcomplete.screens.main.map.toBoundingBox
 import de.westnordost.streetcomplete.screens.main.map.toGeoJsonBoundingBox
 import de.westnordost.streetcomplete.screens.main.map.toLatLon
-import de.westnordost.streetcomplete.util.logs.Log
-import de.westnordost.streetcomplete.util.math.area
-import de.westnordost.streetcomplete.util.math.enclosingBoundingBox
-import de.westnordost.streetcomplete.util.math.distanceTo
-import de.westnordost.streetcomplete.util.math.enlargedBy
-import de.westnordost.streetcomplete.screens.main.edithistory.EditHistoryViewModel
-import de.westnordost.streetcomplete.screens.main.map.MainMap
-import de.westnordost.streetcomplete.screens.main.map.layers.Marker as MapMarker
-import de.westnordost.streetcomplete.ui.common.quest.MapClick
-import de.westnordost.streetcomplete.ui.common.quest.Marker as QuestMarker
-import de.westnordost.streetcomplete.screens.about.AboutNavHost
-import de.westnordost.streetcomplete.screens.main.map.maplibre.CameraPosition as MapCameraPosition
 import de.westnordost.streetcomplete.screens.main.map.toPosition
 import de.westnordost.streetcomplete.screens.settings.SettingsDestination
 import de.westnordost.streetcomplete.screens.settings.SettingsNavHost
 import de.westnordost.streetcomplete.screens.user.UserNavHost
+import de.westnordost.streetcomplete.ui.common.ToastPopup
+import de.westnordost.streetcomplete.ui.common.dialogs.ConfirmationDialog
+import de.westnordost.streetcomplete.ui.common.quest.MapClick
+import de.westnordost.streetcomplete.ui.common.quest.Marker as QuestMarker
 import de.westnordost.streetcomplete.ui.theme.Dimensions
-import kotlinx.coroutines.launch
+import de.westnordost.streetcomplete.util.ktx.nowAsEpochMilliseconds
+import de.westnordost.streetcomplete.util.ktx.toLocation
+import de.westnordost.streetcomplete.util.logs.Log
+import de.westnordost.streetcomplete.util.math.area
+import de.westnordost.streetcomplete.util.math.distanceTo
+import de.westnordost.streetcomplete.util.math.enclosingBoundingBox
+import de.westnordost.streetcomplete.util.math.enlargedBy
 import kotlin.math.PI
 import kotlin.math.max
 import kotlin.math.sqrt
+import kotlin.time.Duration
+import kotlin.time.Duration.Companion.milliseconds
+import kotlinx.coroutines.FlowPreview
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.launch
+import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
-import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.LaunchedEffect
-import androidx.lifecycle.compose.LocalLifecycleOwner
+import org.maplibre.compose.camera.CameraMoveReason
 import org.maplibre.compose.camera.CameraPosition
 import org.maplibre.compose.camera.CameraState
 import org.maplibre.compose.camera.rememberCameraState
+import org.maplibre.compose.location.LocationEvent
+import org.maplibre.compose.location.LocationProvider
+import org.maplibre.compose.location.LocationRequest
+import org.maplibre.compose.location.LocationUnavailableReason
+import org.maplibre.compose.location.SystemSettingsLauncher
+import org.maplibre.compose.util.ClickResult
 
 /** The real main screen, i.e. the map with all the controls on top of it.
  *
  *  This is the iOS counterpart of what `MainActivity` does on Android. It is deliberately
  *  incomplete: the callbacks that need things that do not work on iOS yet - navigating to the
  *  other screens, recording tracks, the quest-solved animation - do nothing for now. */
+@OptIn(FlowPreview::class)
 @Composable
 fun IosMainScreen() {
     val viewModel: MainViewModel = koinViewModel()
@@ -86,6 +110,8 @@ fun IosMainScreen() {
        MainActivity hooks it into its lifecycle on Android */
     val autoSyncer: AutoSyncer = koinInject()
     val locationProvider: LocationProvider = koinInject()
+    val mapAppLauncher: MapAppLauncher = koinInject()
+    val isOpenLocationAvailable = remember { mapAppLauncher.isAvailable() }
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner, autoSyncer) {
         lifecycleOwner.lifecycle.addObserver(autoSyncer)
@@ -118,12 +144,9 @@ fun IosMainScreen() {
        as it does here. */
     val windowInfo = LocalWindowInfo.current
     val layoutDirection = LocalLayoutDirection.current
-    val crosshairOffset = if (shownBottomSheet != null) {
-        Dimensions.getOpenQuestFormMapPadding(windowInfo)
-            .centerOffsetIn(windowInfo.containerDpSize, layoutDirection)
-    } else {
-        null
-    }
+    val formCrosshairOffset = Dimensions.getOpenQuestFormMapPadding(windowInfo)
+        .centerOffsetIn(windowInfo.containerDpSize, layoutDirection)
+    val crosshairOffset = if (shownBottomSheet != null) formCrosshairOffset else null
 
     /* When a quest is opened, Android moves the map so that the element the quest is about is
        inside the part of the map the form does not cover, zooming in on a single node or out to
@@ -185,21 +208,180 @@ fun IosMainScreen() {
         viewModel.metersPerDp.value = cameraState.viewport?.metersPerDpAtTarget ?: 0.0
     }
 
-    // ...and remember where they are now
-    LaunchedEffect(cameraState.position) {
-        val position = cameraState.position
-        prefs.mapPosition = position.target.toLatLon()
-        prefs.mapZoom = position.zoom
-        prefs.mapRotation = position.bearing
-        prefs.mapTilt = position.tilt
+    /* ...and remember where they are now. Debounced because the camera is animated - by following
+       especially - and this would otherwise write four preferences on every frame. */
+    LaunchedEffect(cameraState) {
+        snapshotFlow { cameraState.position }
+            .debounce(SAVE_MAP_POSITION_DELAY)
+            .collect { position ->
+                prefs.mapPosition = position.target.toLatLon()
+                prefs.mapZoom = position.zoom
+                prefs.mapRotation = position.bearing
+                prefs.mapTilt = position.tilt
+            }
     }
 
     val isShowingUndoHistory by editHistoryViewModel.isShowingSidebar.collectAsState()
     var shownMarkers by remember { mutableStateOf<Collection<MapMarker>?>(null) }
     var lastMapClick by remember { mutableStateOf<MapClick?>(null) }
+    var showMapContextMenu by remember { mutableStateOf(false) }
+    var lastMapLongPress by remember { mutableStateOf<Pair<DpOffset, LatLon>?>(null) }
+    var showZoomInToCreateNote by remember { mutableStateOf(false) }
+
+    /* ------------------------------------ location ------------------------------------ */
+
+    val systemSettingsLauncher: SystemSettingsLauncher = koinInject()
+    val isFollowingPosition by viewModel.isFollowingPosition.collectAsState()
+    val isNavigationMode by viewModel.isNavigationMode.collectAsState()
+    var displayedLocation by remember { mutableStateOf<Location?>(null) }
+    var confirmTurnOnLocation by remember { mutableStateOf(false) }
+    var showNoLocation by remember { mutableStateOf(false) }
+    /* where the user has been, most recent last. Only used for the direction of travel in
+       navigation mode so far - it is what Android derives the map rotation from there. */
+    val track = remember { mutableStateListOf<Trackpoint>() }
+    /* the first fix zooms in if the map is zoomed far out, but only the first, so that the user
+       can zoom out again afterwards without it being undone */
+    var hasZoomedToLocation by remember { mutableStateOf(false) }
+
+    // as MainMapFragment.restoreMapState does
+    LaunchedEffect(Unit) {
+        viewModel.isFollowingPosition.value = prefs.mapIsFollowing
+        viewModel.isNavigationMode.value = prefs.mapIsNavigationMode
+    }
+
+    /** Puts the user's location back in the middle, tilted and turned the way they are going if
+     *  navigation mode is on. Mirrors MainMapFragment.centerCurrentPosition. */
+    suspend fun centerOnLocation() {
+        val position = displayedLocation?.position ?: return
+        val current = cameraState.position
+        val navigating = viewModel.isNavigationMode.value
+        val zoom = if (!hasZoomedToLocation && current.zoom < 17.0) 18.0 else current.zoom
+        /* before the animation, not after: a fix arriving inside those 600ms cancels this block
+           at the animateTo, and the next one would zoom in all over again */
+        hasZoomedToLocation = true
+        cameraState.animateTo(
+            current.copy(
+                target = position.toPosition(),
+                bearing = if (navigating) getTrackBearing(track) ?: current.bearing else current.bearing,
+                tilt = if (navigating) NAVIGATION_MODE_TILT else current.tilt,
+                zoom = zoom,
+            ),
+            CENTER_ON_LOCATION_DURATION,
+        )
+    }
+
+    fun setIsFollowingPosition(follow: Boolean) {
+        viewModel.isFollowingPosition.value = follow
+        prefs.mapIsFollowing = follow
+        // so that following again zooms in again, as MainMapFragment.isFollowingPosition does
+        if (!follow) hasZoomedToLocation = false
+        if (follow) scope.launch { centerOnLocation() }
+    }
+
+    fun setIsNavigationMode(navigation: Boolean) {
+        viewModel.isNavigationMode.value = navigation
+        prefs.mapIsNavigationMode = navigation
+        if (navigation) {
+            scope.launch { centerOnLocation() }
+        } else {
+            /* deliberately not resetting the rotation as well - the user may well want to keep
+               looking that way, and the compass button is there to get back to north (#5886) */
+            scope.launch {
+                cameraState.animateTo(cameraState.position.copy(tilt = 0.0), LEAVE_NAVIGATION_DURATION)
+            }
+        }
+    }
+
+    /* Panning is how the user stops the map following them - the location button only ever turns
+       following on, exactly as on Android (MainActivity.onPanBegin). It is also what
+       userHasMovedCamera means, which is what collapses the attribution popup. */
+    LaunchedEffect(cameraState.position) {
+        if (cameraState.moveReason != CameraMoveReason.GESTURE) return@LaunchedEffect
+        viewModel.userHasMovedCamera.value = true
+        if (displayedLocation != null && viewModel.isFollowingPosition.value) {
+            setIsFollowingPosition(false)
+        }
+    }
+
+    val surveyChecker: SurveyChecker = koinInject()
+    // only while the app is in the foreground, the way Android's observe() is lifecycle scoped
+    LaunchedEffect(locationProvider, lifecycleOwner) {
+        lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+        locationProvider.updates(LocationRequest()).collectLatest { event ->
+            viewModel.locationState.value = when (event) {
+                is LocationEvent.Fix -> LocationState.UPDATING
+                is LocationEvent.Unavailable -> when (event.reason) {
+                    LocationUnavailableReason.ServicesDisabled -> LocationState.ALLOWED
+                    LocationUnavailableReason.TemporarilyUnavailable -> LocationState.SEARCHING
+                    LocationUnavailableReason.PermissionDenied -> LocationState.DENIED
+                    LocationUnavailableReason.Unsupported,
+                    LocationUnavailableReason.Misconfigured,
+                    LocationUnavailableReason.UnexpectedFailure -> null
+                }
+            }
+            when (event) {
+                is LocationEvent.Fix -> {
+                    val location = event.location.toLocation()
+                    displayedLocation = location
+                    // what decides whether an edit counts as surveyed rather than armchair mapped
+                    surveyChecker.addRecentLocation(location)
+                    if (location.accuracy <= MIN_TRACK_ACCURACY) {
+                        val now = nowAsEpochMilliseconds()
+                        /* after a gap - backgrounded, or no reception - the previous points say
+                           nothing about which way the user is going now, and taking a bearing
+                           across the gap would turn the map to a heading they are not travelling.
+                           Android starts a new track segment here; this track only exists for the
+                           bearing, so dropping it is the same thing. */
+                        val last = track.lastOrNull()
+                        if (last != null && now - last.time > MAX_TIME_BETWEEN_LOCATIONS) track.clear()
+                        track.add(Trackpoint(location.position, now, location.accuracy, 0f))
+                        if (track.size > MAX_TRACK_LENGTH) track.removeFirst()
+                    }
+                    /* read through the flows rather than the captured values: this collector
+                       outlives any one composition. Following is suspended while a form or the
+                       edit history is open, the same way MainActivity freezes the map, so that it
+                       does not fight what those move the camera to. */
+                    val isFrozen = mainBottomSheetViewModel.shownBottomSheet.value != null ||
+                        editHistoryViewModel.isShowingSidebar.value
+                    if (viewModel.isFollowingPosition.value && !isFrozen) centerOnLocation()
+                }
+                is LocationEvent.Unavailable -> {
+                    displayedLocation = null
+                    // through the setter, so the map also untilts and the preference follows
+                    if (viewModel.isNavigationMode.value) setIsNavigationMode(false)
+                    track.clear()
+                }
+            }
+        }
+        }
+    }
+
+    // so that the pointer pin knows where to point when the location is off screen
+    LaunchedEffect(displayedLocation, cameraState.position, cameraState.viewport) {
+        viewModel.displayedPosition.value =
+            displayedLocation?.let { cameraState.screenOffsetOf(it.position, density) }
+    }
     var lastQuestSolved by remember { mutableStateOf<QuestSolvedEvent?>(null) }
     // the screens that are their own Activity on Android are shown on top of the map here
     var shownScreen by remember { mutableStateOf<FullScreen?>(null) }
+
+    /* Notes are created at the crosshair - MainBottomSheet passes the map position to
+       CreateNoteForm - so, as MainActivity.composeNote does, move the long pressed position
+       there before opening the form */
+    fun createNoteAt(position: LatLon) {
+        if (cameraState.position.zoom < ApplicationConstants.NOTE_MIN_ZOOM) {
+            showZoomInToCreateNote = true
+            return
+        }
+        mainBottomSheetViewModel.showCreateNote(null)
+        scope.launch {
+            /* stop wherever the camera is first: moveTo works out where to go by asking the map
+               where the position currently is on screen, which is meaningless mid-animation, and
+               following may well have one running */
+            cameraState.animateTo(cameraState.position, Duration.ZERO)
+            cameraState.moveTo(position, formCrosshairOffset, windowInfo.containerDpSize)
+        }
+    }
 
     fun zoomBy(diff: Double) {
         scope.launch {
@@ -227,11 +409,22 @@ fun IosMainScreen() {
                     editHistoryViewModel.hideSidebar()
                 }
             },
-            location = null,
+            location = displayedLocation,
+            // no compass yet, so no direction cone on the location dot
             rotation = null,
             shownBottomSheet = shownBottomSheet,
             shownMarkers = shownMarkers,
             isShowingUndoHistorySidebar = isShowingUndoHistory,
+            onMapLongClick = { position, offset ->
+                /* not while a form or the edit history is open, as MainActivity.onLongPress also
+                   refuses: creating a note from here replaces whatever is open, throwing away
+                   anything typed into it without asking */
+                if (shownBottomSheet == null && !isShowingUndoHistory) {
+                    lastMapLongPress = offset to position.toLatLon()
+                    showMapContextMenu = true
+                }
+                ClickResult.Consume
+            },
             cameraState = cameraState,
             modifier = Modifier.fillMaxSize(),
         )
@@ -243,23 +436,38 @@ fun IosMainScreen() {
             onClickZoomOut = { zoomBy(-1.0) },
             onZoomDrag = { diff -> zoomBy(diff.toDouble()) },
             onClickCompass = {
-                scope.launch { cameraState.animateTo(cameraState.position.copy(bearing = 0.0, tilt = 0.0)) }
-            },
-            onClickLocation = {
+                /* back to north and flat, and out of navigation mode - wanting north up means not
+                   wanting the map turned in the direction of travel any more.
+
+                   One animation for both: animateTo takes a whole CameraPosition, so letting
+                   setIsNavigationMode issue its own would supersede this one and leave the map
+                   turned. Android can do it in two because its camera updates are partial. */
+                viewModel.isNavigationMode.value = false
+                prefs.mapIsNavigationMode = false
                 scope.launch {
-                    val request = LocationRequest(LocationAccuracy.High, 30.seconds, 100.meters)
-                    val fix = locationProvider.updates(request)
-                        .first { it is LocationEvent.Fix } as LocationEvent.Fix
-                    val (position, _) = fix.location.position
                     cameraState.animateTo(
-                        cameraState.position.copy(
-                            target = position,
-                            zoom = maxOf(cameraState.position.zoom, 17.0),
-                        )
+                        cameraState.position.copy(bearing = 0.0, tilt = 0.0),
+                        LEAVE_NAVIGATION_DURATION,
                     )
                 }
             },
-            onClickLocationPointer = { },
+            /* one button, two things, as on Android: first tap follows the location, the next
+               turns the map in the direction of travel, the one after that turns that off again */
+            onClickLocation = {
+                when (viewModel.locationState.value) {
+                    // the app was refused location, which its own settings page can undo
+                    LocationState.DENIED -> confirmTurnOnLocation = true
+                    /* location services are off system wide. iOS exposes no URL for that screen -
+                       IosSystemSettingsLauncher.canOpenLocationServicesSettings is always false -
+                       so do what Android does when it cannot open it either, and just say so */
+                    LocationState.ALLOWED -> showNoLocation = true
+                    else -> {
+                        if (!isFollowingPosition) setIsFollowingPosition(true)
+                        else setIsNavigationMode(!isNavigationMode)
+                    }
+                }
+            },
+            onClickLocationPointer = { setIsFollowingPosition(true) },
             onClickCreate = { mainBottomSheetViewModel.showCreateNote(null) },
             onClickStopTrackRecording = { },
             onDownload = { viewModel.download(cameraState.downloadArea() ?: return@MainScreen) },
@@ -278,6 +486,45 @@ fun IosMainScreen() {
             getOffset = { position -> cameraState.screenOffsetOf(position, density) },
             lastMapClick = lastMapClick,
         )
+
+        /* Long pressing the map is the only way to create a note or start recording a track,
+           as on Android - there is no button for either */
+        MapContextMenu(
+            expanded = showMapContextMenu,
+            onDismissRequest = { showMapContextMenu = false },
+            onClickCreateNote = { lastMapLongPress?.let { (_, position) -> createNoteAt(position) } },
+            onClickCreateTrack = { /* recording tracks does not work on iOS yet */ },
+            isCreateTrackAvailable = false,
+            onClickOpenLocation = {
+                lastMapLongPress?.let { (_, position) ->
+                    mapAppLauncher.openAt(position, cameraState.position.zoom)
+                }
+            },
+            isOpenLocationAvailable = isOpenLocationAvailable,
+            offset = lastMapLongPress?.first ?: DpOffset.Zero,
+        )
+
+        if (confirmTurnOnLocation) {
+            ConfirmationDialog(
+                onDismissRequest = { confirmTurnOnLocation = false },
+                onConfirmed = { systemSettingsLauncher.openApplicationSettings() },
+                text = { Text(stringResource(Res.string.turn_on_location_request)) },
+            )
+        }
+
+        if (showZoomInToCreateNote) {
+            ToastPopup(
+                onDismissRequest = { showZoomInToCreateNote = false },
+                text = stringResource(Res.string.create_new_note_unprecise),
+            )
+        }
+
+        if (showNoLocation) {
+            ToastPopup(
+                onDismissRequest = { showNoLocation = false },
+                text = stringResource(Res.string.no_gps_no_quests),
+            )
+        }
 
         lastQuestSolved?.let { LastQuestSolvedEffect(it) }
 
@@ -374,6 +621,12 @@ private const val FOCUS_MARGIN_FRACTION = 0.2
 private const val MIN_FOCUS_MARGIN_IN_METERS = 20.0
 
 private val FOCUS_DURATION = 450.milliseconds
+private val MOVE_DURATION = 300.milliseconds
+private val CENTER_ON_LOCATION_DURATION = 600.milliseconds
+private val LEAVE_NAVIGATION_DURATION = 300.milliseconds
+
+/** How long the map has to be still before where it is is worth writing down */
+private val SAVE_MAP_POSITION_DELAY = 500.milliseconds
 private val UNFOCUS_DURATION = 300.milliseconds
 
 /** Moves the camera so that all of [geometry] is visible in the part of the map left over by
@@ -391,8 +644,50 @@ private suspend fun CameraState.focusOn(
     animateTo(
         boundingBox = bounds.enlargedBy(margin).toGeoJsonBoundingBox(),
         bearing = position.bearing,
-        tilt = position.tilt,
+        /* flat, whatever the map was doing. Android gets this from freezeMap turning navigation
+           mode off while a form is open; fitting a bounding box to a tilted camera would also put
+           the geometry somewhere other than where it was asked to go. The tilt comes back by
+           itself, on the first fix after the form closes and following resumes. */
+        tilt = 0.0,
         padding = padding,
         duration = FOCUS_DURATION,
     )
 }
+
+/** Moves the camera, without changing the zoom, so that [position] ends up at [offset] on a map
+ *  of size [size].
+ *
+ *  Subtracting in screen space like this is exact whatever the zoom and the bearing, because the
+ *  projection is then a similarity and the two cancel. It is NOT exact when the map is tilted,
+ *  which it can be - by gesture, or in navigation mode - and the further the offset is from the
+ *  middle the more it is out. Android has no such problem because it moves the camera and sets
+ *  its padding in one go, and the map does the off-centre part itself; the same would work here
+ *  via MaplibreMap's cameraPadding, which would make this function unnecessary. */
+private suspend fun CameraState.moveTo(
+    position: LatLon,
+    offset: DpOffset,
+    size: DpSize,
+) {
+    val current = screenLocationFromPosition(position.toPosition()) ?: return
+    // where the camera target has to be for the position to land on the offset
+    val target = positionFromScreenLocation(DpOffset(
+        x = current.x + size.width / 2 - offset.x,
+        y = current.y + size.height / 2 - offset.y,
+    )) ?: return
+    animateTo(this.position.copy(target = target), MOVE_DURATION)
+}
+
+
+
+/** How far the map is tilted when it turns in the direction the user is going, as on Android */
+private const val NAVIGATION_MODE_TILT = 60.0
+
+/** Fixes less precise than this are not put on the track, as on Android */
+private const val MIN_TRACK_ACCURACY = 20f
+
+/** Only the recent part of the track is kept - it is only used to work out which way the user is
+ *  going. Recording a track to attach to a note keeps its own, complete list. */
+private const val MAX_TRACK_LENGTH = 200
+
+/** A longer gap than this between fixes starts the track over, as on Android */
+private const val MAX_TIME_BETWEEN_LOCATIONS = 60L * 1000

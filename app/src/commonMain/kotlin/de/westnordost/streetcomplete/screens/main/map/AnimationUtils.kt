@@ -34,18 +34,25 @@ fun animateLatLonAsState(
     )
 
     val animatedLongitude by animateIntAsState(
-        targetValue = (targetLongitude * 7).toInt(),
+        targetValue = (targetLongitude * FIXED_POINT_SCALE).toInt(),
         animationSpec = intAnimationSpec,
         label = label+"-Lon"
     )
     val animatedLatitude by animateIntAsState(
-        targetValue = (targetValue.latitude * 7).toInt(),
+        targetValue = (targetValue.latitude * FIXED_POINT_SCALE).toInt(),
         animationSpec = intAnimationSpec,
         label = label+"-Lat"
     )
 
     return remember { derivedStateOf { LatLon(
-        latitude = animatedLatitude/7.0,
-        longitude = normalizeLongitude(animatedLongitude/7.0)
+        latitude = animatedLatitude / FIXED_POINT_SCALE,
+        longitude = normalizeLongitude(animatedLongitude / FIXED_POINT_SCALE)
     ) } }
 }
+
+/** Coordinates are animated as fixed point integers, there being no animation for a LatLon.
+ *
+ *  At this scale the animated position is precise to about 11cm, far finer than any GPS fix, and
+ *  a whole turn around the globe stays well inside Int range: 180 * 1e6 = 1.8e8 against a limit of
+ *  about 2.1e9. It is also what makes visibilityThreshold = 1 above mean "settled to 11cm". */
+private const val FIXED_POINT_SCALE = 1e6

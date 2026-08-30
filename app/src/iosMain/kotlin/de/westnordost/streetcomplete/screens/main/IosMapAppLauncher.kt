@@ -1,14 +1,20 @@
 package de.westnordost.streetcomplete.screens.main
 
 import de.westnordost.streetcomplete.data.osm.mapdata.LatLon
+import kotlinx.cinterop.ExperimentalForeignApi
+import platform.CoreGraphics.CGRectGetMidX
+import platform.CoreGraphics.CGRectGetMidY
+import platform.CoreGraphics.CGRectMake
 import platform.Foundation.NSURL
 import platform.UIKit.UIAlertAction
 import platform.UIKit.UIAlertActionStyleDefault
 import platform.UIKit.UIAlertController
 import platform.UIKit.UIAlertControllerStyleActionSheet
 import platform.UIKit.UIApplication
+import platform.UIKit.popoverPresentationController
 
 object IosMapAppLauncher : MapAppLauncher {
+    @OptIn(ExperimentalForeignApi::class)
     override fun openAt(position: LatLon, zoom: Double) {
         val app = UIApplication.sharedApplication
 
@@ -27,8 +33,25 @@ object IosMapAppLauncher : MapAppLauncher {
             }
         }
 
-        val rootViewController = app.keyWindow?.rootViewController
-        rootViewController?.presentViewController(alert, animated = true, completion = null)
+        val rootViewController = app.keyWindow?.rootViewController ?: return
+
+        /* an action sheet is presented in a popover on iPad, and UIKit throws if it is not told
+           where to put it. There is no button to point it at - the menu it was chosen from is
+           already gone - so point it at the middle of the screen and let it present as a sheet. */
+        alert.popoverPresentationController?.let { popover ->
+            val view = rootViewController.view
+            popover.sourceView = view
+            popover.sourceRect = CGRectMake(
+                x = CGRectGetMidX(view.bounds),
+                y = CGRectGetMidY(view.bounds),
+                width = 0.0,
+                height = 0.0,
+            )
+            // no arrow - the menu it was chosen from is gone, so there is nothing to point at
+            popover.permittedArrowDirections = 0uL
+        }
+
+        rootViewController.presentViewController(alert, animated = true, completion = null)
     }
 
     override fun isAvailable(): Boolean {
