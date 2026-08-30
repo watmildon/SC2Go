@@ -8,6 +8,7 @@ import com.russhwolf.settings.int
 import com.russhwolf.settings.long
 import com.russhwolf.settings.nullableString
 import de.westnordost.streetcomplete.data.messages.Message
+import de.westnordost.streetcomplete.ApplicationConstants
 import de.westnordost.streetcomplete.data.osm.mapdata.LatLon
 import de.westnordost.streetcomplete.osm.localized_name.LocalizedName
 import de.westnordost.streetcomplete.util.Mockable
@@ -101,13 +102,13 @@ class Preferences(private val prefs: ObservableSettings) {
             prefs.putDouble(MAP_LONGITUDE, value.longitude)
         }
         get() = LatLon(
-            latitude = prefs.getDouble(MAP_LATITUDE, 0.0),
-            longitude = prefs.getDouble(MAP_LONGITUDE, 0.0)
+            latitude = prefs.getDouble(MAP_LATITUDE, ApplicationConstants.DEFAULT_MAP_POSITION.latitude),
+            longitude = prefs.getDouble(MAP_LONGITUDE, ApplicationConstants.DEFAULT_MAP_POSITION.longitude)
         )
     var mapRotation: Double by prefs.double(MAP_ROTATION, 0.0)
     var mapTilt: Double by prefs.double(MAP_TILT, 0.0)
-    var mapZoom: Double by prefs.double(MAP_ZOOM, 0.0)
-    var mapIsFollowing: Boolean by prefs.boolean(MAP_FOLLOWING, true)
+    var mapZoom: Double by prefs.double(MAP_ZOOM, ApplicationConstants.DEFAULT_MAP_ZOOM)
+    var mapIsFollowing: Boolean by prefs.boolean(MAP_FOLLOWING, ApplicationConstants.DEFAULT_MAP_IS_FOLLOWING)
     var mapIsNavigationMode: Boolean by prefs.boolean(MAP_NAVIGATION_MODE, false)
 
     var clearedTangramCache: Boolean by prefs.boolean(CLEARED_TANGRAM_CACHE, false)
@@ -286,12 +287,12 @@ class Preferences(private val prefs: ObservableSettings) {
         private const val WEEKLY_OSM_LAST_NOTIFIED_PUB_DATE = "weeklyOsmLastNotifiedPubDate"
 
         // map state
-        private const val MAP_LATITUDE = "map.latitude"
-        private const val MAP_LONGITUDE = "map.longitude"
+        private const val MAP_LATITUDE = "map.latitude2"
+        private const val MAP_LONGITUDE = "map.longitude2"
         private const val MAP_ROTATION = "map.rotation2"
         private const val MAP_TILT = "map.tilt2"
-        private const val MAP_ZOOM = "map.zoom2"
-        private const val MAP_FOLLOWING = "map.following"
+        private const val MAP_ZOOM = "map.zoom3"
+        private const val MAP_FOLLOWING = "map.following2"
         private const val MAP_NAVIGATION_MODE = "map.navigation_mode"
 
         // clean-up after upgrade

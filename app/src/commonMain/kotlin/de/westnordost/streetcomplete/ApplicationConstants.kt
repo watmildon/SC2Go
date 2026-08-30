@@ -1,5 +1,7 @@
 package de.westnordost.streetcomplete
 
+import de.westnordost.streetcomplete.data.osm.mapdata.LatLon
+
 import de.westnordost.streetcomplete.data.osm.edits.split_way.SplitWayAction
 import kotlin.time.Duration.Companion.days
 import kotlin.time.Duration.Companion.minutes
@@ -128,6 +130,24 @@ object ApplicationConstants {
     (test data needs to be created there).
      */
     const val USE_TEST_API = true
+
+    /* Where the map opens before the user has ever moved it.
+     *
+     * Upstream that is nowhere - 0/0 at zoom 0 - because the map is expected to jump to the user's
+     * location as soon as there is a fix. That is no use against the test API, where the data the
+     * user can edit is wherever the test data was put, not where they are. So while USE_TEST_API
+     * is on, start at the test data instead and do not follow the location, which would drag the
+     * map straight off it. Reverts to upstream behaviour by itself when USE_TEST_API goes off. */
+
+    /** Centre of changeset 669366 on the dev API, ~430 objects covering the range of quests */
+    private val TEST_DATA_POSITION = LatLon(47.6701952, -122.1022780)
+
+    /** Frames the whole of it on a phone, so one download covers the lot */
+    private const val TEST_DATA_ZOOM = 15.0
+
+    val DEFAULT_MAP_POSITION = if (USE_TEST_API) TEST_DATA_POSITION else LatLon(0.0, 0.0)
+    val DEFAULT_MAP_ZOOM = if (USE_TEST_API) TEST_DATA_ZOOM else 0.0
+    val DEFAULT_MAP_IS_FOLLOWING = !USE_TEST_API
 
     const val MAX_OSM_TAG_VALUE_LENGTH = 255
 }
