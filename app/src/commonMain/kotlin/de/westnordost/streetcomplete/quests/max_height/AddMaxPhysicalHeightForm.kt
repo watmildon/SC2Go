@@ -94,7 +94,8 @@ fun AddMaxPhysicalHeightForm(
             onClickMeasure = { lengthUnit ->
                 arMeasureAppLauncher.measure(
                     lengthUnit = lengthUnit,
-                    measureVertical = false,
+                    // this is the one quest that measures upwards - a clearance, not a width
+                    measureVertical = true,
                     onResult = ::onMeasureResult
                 )
             },
