@@ -32,5 +32,8 @@
 
     <key>NSLocationWhenInUseUsageDescription</key>
     <string>Precise location permission is needed to show your position on the map and download data in your vicinity.</string>
+
+    <key>NSCameraUsageDescription</key>
+    <string>The camera is needed to attach photos to the OpenStreetMap notes you leave.</string>
 </dict>
 </plist>
