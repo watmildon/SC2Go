@@ -282,6 +282,30 @@ fun IosMainScreen() {
         track.clear()
     }
 
+    /** Moves the settled start of a long track into [oldTracks], which redraw only when a stretch
+     *  is added rather than on every fix, so the list that is rebuilt per fix stays bounded.
+     *
+     *  Android caps its equivalent at 100 points (TracksMapComponent.addToCurrentTrack), but there
+     *  the component only draws; here [track] is also the buffer handed to the note when recording
+     *  stops, and the source [recentTrack] takes the bearing from. So it is never rolled over while
+     *  recording - the trace has to stay whole - and what is kept back is a whole
+     *  [TRACK_BEARING_LOOKBACK], so the bearing sees exactly what it did before.
+     *
+     *  The stretches overlap by their shared point, or the drawn line would break at every seam.
+     *  The settled part is from then on drawn as an old track - fainter, and never in the recording
+     *  colour - which is what Android does too, and why this never runs while recording. */
+    fun rollOverSettledTrack() {
+        if (viewModel.isRecordingTracks.value) return
+        if (track.size <= TRACK_MAX_DRAWN_POINTS) return
+        // never negative, so lowering TRACK_MAX_DRAWN_POINTS below the lookback cannot throw here
+        val keepFrom = (track.size - TRACK_BEARING_LOOKBACK).coerceAtLeast(0)
+        val settled = track.take(keepFrom + 1)
+        val kept = track.drop(keepFrom)
+        oldTracks.add(settled)
+        track.clear()
+        track.addAll(kept)
+    }
+
     /* the first fix zooms in if the map is zoomed far out, but only the first, so that the user
        can zoom out again afterwards without it being undone */
     var hasZoomedToLocation by remember { mutableStateOf(false) }
@@ -387,6 +411,7 @@ fun IosMainScreen() {
                            toLocation() before it gets here. Every <ele> in an uploaded trace will
                            be 0.0 until that type carries it. */
                         track.add(Trackpoint(location.position, now, location.accuracy, 0f))
+                        rollOverSettledTrack()
                     }
                     /* read through the flows rather than the captured values: this collector
                        outlives any one composition. Following is suspended while a form or the
@@ -455,8 +480,12 @@ fun IosMainScreen() {
            there is nothing to do but keep recording. Android stops anyway and loses the track,
            which is worst exactly when it is most likely: no fix is why reception was lost. */
         val position = displayedLocation?.position ?: return
-        viewModel.isRecordingTracks.value = false
+        /* The trace is taken before the flag is cleared, not after: clearing it first opens a
+           window - however short - in which rollOverSettledTrack would consider the track fair
+           game and move all but the bearing lookback into the old stretches, and what got
+           attached to the note would be the last minute of a survey that lasted hours. */
         val recorded = track.toList()
+        viewModel.isRecordingTracks.value = false
         startNewTrack()
         mainBottomSheetViewModel.showCreateNote(recorded.takeIf { it.isNotEmpty() })
         scope.launch {
@@ -779,6 +808,11 @@ private const val MIN_TRACK_ACCURACY = 20f
 
 /** How many fixes back the direction of travel is worked out from */
 private const val TRACK_BEARING_LOOKBACK = 200
+
+/** Above this many points the settled start of the current track is rolled into the old ones, so
+ *  that what is copied and redrawn on every fix does not grow with the length of the survey. Must
+ *  stay above [TRACK_BEARING_LOOKBACK], which is what is kept back each time. */
+private const val TRACK_MAX_DRAWN_POINTS = 400
 
 /** A longer gap than this between fixes starts the track over, as on Android */
 private const val MAX_TIME_BETWEEN_LOCATIONS = 60L * 1000
