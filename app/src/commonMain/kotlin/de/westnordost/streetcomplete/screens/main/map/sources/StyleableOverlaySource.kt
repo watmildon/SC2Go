@@ -6,6 +6,7 @@ import de.westnordost.streetcomplete.data.osm.edits.MapDataWithEditsSource
 import de.westnordost.streetcomplete.data.osm.mapdata.BoundingBox
 import de.westnordost.streetcomplete.data.osm.mapdata.ElementKey
 import de.westnordost.streetcomplete.data.osm.mapdata.MapDataWithGeometry
+import de.westnordost.streetcomplete.data.osm.mapdata.MutableMapDataWithGeometry
 import de.westnordost.streetcomplete.data.osm.mapdata.key
 import de.westnordost.streetcomplete.data.overlays.Overlay
 import de.westnordost.streetcomplete.data.overlays.SelectedOverlaySource
@@ -55,10 +56,33 @@ class StyleableOverlaySource(
     }
     private val mapDataWithEditsListener = object : MapDataWithEditsSource.Listener {
         override fun onUpdated(updated: MapDataWithGeometry, deleted: Collection<ElementKey>) {
+            // nothing to restyle, and nothing is copied below for the common case of no overlay
+            if (selectedOverlay.value == null) return
+            /* Read here, on the thread that dispatched the update, and not in the coroutine below.
+               The other listeners walk this same instance on this thread - OsmQuestController does,
+               synchronously - and viewLifecycleScope has no dispatcher, so deferring the walk would
+               read these maps from a worker thread while they are still being read here. Two
+               readers and no writer is safe in principle, but this is the structure behind the
+               unexplained Native segfault, so it is kept to the one thread.
+
+               Taking the keys and a copy in the same pass also means this class calls iterator()
+               only once per instance, where the overlay's own traversal plus a second pass over
+               the keys would have made two. That is not a proof against the segfault - the same
+               instance is already iterated three times in MapDataWithEditsSourceImpl.onUpdated on
+               every upload without crashing, so the real trigger is narrower and still unknown -
+               but two passes is the one shape that has actually been seen to crash, and this
+               avoids it for the price of a shallow copy. See KOTLIN_NATIVE_BUGS.md #4. */
+            val updatedKeys = HashSet<ElementKey>()
+            val updatedCopy = MutableMapDataWithGeometry()
+            updatedCopy.boundingBox = updated.boundingBox
+            for (element in updated) {
+                updatedKeys.add(element.key)
+                updatedCopy.put(element, updated.getGeometry(element.type, element.id))
+            }
             val oldUpdateJob = updateJob
             updateJob = viewLifecycleScope.launch {
                 oldUpdateJob?.join() // don't cancel, as updateStyledElements only updates existing data
-                updateStyledElements(updated, deleted)
+                updateStyledElements(updatedCopy, updatedKeys, deleted)
             }
         }
 
@@ -80,8 +104,10 @@ class StyleableOverlaySource(
             if (value) {
                 viewLifecycleScope.coroutineContext.cancelChildren()
                 selectedOverlaySource.removeListener(selectedOverlayListener)
+                mapDataWithEditsSource.removeListener(mapDataWithEditsListener)
             } else {
                 selectedOverlaySource.addListener(selectedOverlayListener)
+                mapDataWithEditsSource.addListener(mapDataWithEditsListener)
                 updateSelectedOverlay()
             }
         }
@@ -89,11 +115,13 @@ class StyleableOverlaySource(
     init {
         updateSelectedOverlay()
         selectedOverlaySource.addListener(selectedOverlayListener)
+        mapDataWithEditsSource.addListener(mapDataWithEditsListener)
     }
 
     fun onDestroy() {
         viewLifecycleScope.coroutineContext.cancelChildren()
         selectedOverlaySource.removeListener(selectedOverlayListener)
+        mapDataWithEditsSource.removeListener(mapDataWithEditsListener)
     }
 
     fun onMapMoved(cameraState: CameraState) {
@@ -145,7 +173,12 @@ class StyleableOverlaySource(
         }
     }
 
-    private suspend fun updateStyledElements(updated: MapDataWithGeometry, deleted: Collection<ElementKey>) {
+    /** [updated] is the private copy taken in the listener, and [updatedKeys] the keys it held. */
+    private suspend fun updateStyledElements(
+        updated: MapDataWithGeometry,
+        updatedKeys: Set<ElementKey>,
+        deleted: Collection<ElementKey>
+    ) {
         val styledElements = mapDataInViewMutex.withLock {
             val displayedBBox = lastDisplayedRect?.asBoundingBox(TILES_ZOOM) ?: return
             var hasChanges = false
@@ -156,9 +189,9 @@ class StyleableOverlaySource(
             }
             val styledElementsByKey = createStyledElementsByKey(overlay, updated).toMap()
             // elements that used to be displayed in the overlay but now not anymore
-            updated.forEach {
-                if (!styledElementsByKey.containsKey(it.key)) {
-                    if (mapDataInView.remove(it.key) != null) hasChanges = true
+            updatedKeys.forEach { key ->
+                if (!styledElementsByKey.containsKey(key)) {
+                    if (mapDataInView.remove(key) != null) hasChanges = true
                 }
             }
             // elements that are either newly displayed or which were updated
