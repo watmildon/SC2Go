@@ -4,16 +4,27 @@ import de.westnordost.streetcomplete.data.osm.edits.update_tags.StringMapEntryAd
 import de.westnordost.streetcomplete.data.osm.edits.update_tags.StringMapEntryDelete
 import de.westnordost.streetcomplete.data.osm.edits.update_tags.StringMapEntryModify
 import de.westnordost.streetcomplete.osm.nowAsCheckDateString
+import de.westnordost.streetcomplete.osm.toCheckDateString
 import de.westnordost.streetcomplete.quests.answerAppliedTo
 import de.westnordost.streetcomplete.testutils.feature
 import de.westnordost.streetcomplete.testutils.node
+import de.westnordost.streetcomplete.util.ktx.toLocalDate
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
+import kotlin.time.Instant
 
 class CheckOpeningHoursSignedTest {
     private val questType = CheckOpeningHoursSigned(getFeature = { feature() })
+
+    /* When the place turns out to be signed, the quest sets the check date from the element's
+       previous edit rather than from now, and answerAppliedTo supplies that timestamp as 0.
+       Derived here the same way the quest derives it - as a local date, in whatever zone the
+       machine running the test is in - and not written out as "1970-01-01", which is only the
+       local date of the epoch at or east of UTC. Hardcoded, this test passes in Europe and fails
+       anywhere west of Greenwich. */
+    private val checkDateOfLastEdit = Instant.fromEpochMilliseconds(0).toLocalDate().toCheckDateString()
 
     @Test fun `is applicable to old place`() {
         assertTrue(questType.isApplicableTo(node(
@@ -90,7 +101,7 @@ class CheckOpeningHoursSignedTest {
         assertEquals(
             setOf(
                 StringMapEntryDelete("opening_hours:signed", "no"),
-                StringMapEntryAdd("check_date:opening_hours", "1970-01-01")
+                StringMapEntryAdd("check_date:opening_hours", checkDateOfLastEdit)
             ),
             questType.answerAppliedTo(true, mapOf("opening_hours:signed" to "no"))
         )
@@ -113,7 +124,7 @@ class CheckOpeningHoursSignedTest {
         assertEquals(
             setOf(
                 StringMapEntryDelete("opening_hours:signed", "no"),
-                StringMapEntryAdd("check_date:opening_hours", "1970-01-01"),
+                StringMapEntryAdd("check_date:opening_hours", checkDateOfLastEdit),
             ),
             questType.answerAppliedTo(
                 true,
