@@ -129,7 +129,7 @@ object ApplicationConstants {
     locally before an upload etc) and that test API has a separate database that is mostly empty
     (test data needs to be created there).
      */
-    const val USE_TEST_API = true
+    const val USE_TEST_API = false
 
     /* Where the map opens before the user has ever moved it.
      *
