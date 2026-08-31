@@ -8,8 +8,14 @@ import java.io.FileWriter
 import java.util.Properties
 
 
-/** App version name, code and flavor */
-val appVersionName = "63.4"
+/** App version name, code and flavor.
+ *
+ *  The -prometheus suffix marks builds of this port. It rides along into
+ *  BuildConfig.VERSION_NAME -> ApplicationConstants.USER_AGENT -> the "created_by" changeset tag
+ *  and the HTTP User-Agent, so the edits this app uploads to OSM can be told apart from those of
+ *  the released StreetComplete, and found or reverted on their own if it misbehaves.
+ *  Do not drop it while this build can reach the live API. */
+val appVersionName = "63.4-prometheus"
 val appVersionCode = 6308
 
 /** Localizations the app should be available in */
