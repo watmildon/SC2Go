@@ -2,6 +2,8 @@ package de.westnordost.streetcomplete.data.osm.edits.upload.changesets
 
 import de.westnordost.streetcomplete.data.AuthorizationException
 import de.westnordost.streetcomplete.data.ConnectionException
+import de.westnordost.streetcomplete.util.logs.Log
+import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineName
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -23,7 +25,16 @@ class IosChangesetAutoCloser(
     private val openChangesetsManager: () -> OpenChangesetsManager
 ) : ChangesetAutoCloser {
 
-    private val scope = CoroutineScope(SupervisorJob() + CoroutineName("AutoCloseChangesets"))
+    private val scope = CoroutineScope(
+        SupervisorJob() +
+        CoroutineName(TAG) +
+        /* Nothing is waiting on this job, so anything the catches below do not name - an
+           ApiClientException for an unexpected status, a database error while reading the open
+           changesets - would reach the default handler, and on Kotlin/Native an unhandled
+           coroutine exception takes the whole app down. Closing changesets early is only ever
+           nice-to-have, so it must never be able to do that. */
+        CoroutineExceptionHandler { _, e -> Log.e(TAG, "Uncaught exception", e) }
+    )
 
     private var job: Job? = null
 
@@ -43,5 +54,9 @@ class IosChangesetAutoCloser(
                 // the app
             }
         }
+    }
+
+    companion object {
+        private const val TAG = "AutoCloseChangesets"
     }
 }
