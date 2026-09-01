@@ -34,10 +34,13 @@ import de.westnordost.streetcomplete.screens.main.map.Light
 import de.westnordost.streetcomplete.screens.main.map.MapColors
 import de.westnordost.streetcomplete.screens.main.map.MapPerf
 import de.westnordost.streetcomplete.screens.main.map.MapStyle
-import de.westnordost.streetcomplete.screens.main.map.PinIconWarmup
+import de.westnordost.streetcomplete.screens.main.map.layers.PinIconImage
 import de.westnordost.streetcomplete.screens.main.map.Night
 import de.westnordost.streetcomplete.screens.main.map.layers.Pin
 import de.westnordost.streetcomplete.screens.main.map.layers.PinsLayers
+import de.westnordost.streetcomplete.screens.main.map.layers.pinFeatures
+import org.maplibre.compose.expressions.ast.Expression
+import org.maplibre.compose.expressions.value.ImageValue
 import de.westnordost.streetcomplete.screens.main.map.toBoundingBox
 import de.westnordost.streetcomplete.ui.common.BackIcon
 import de.westnordost.streetcomplete.util.logs.Log
@@ -90,6 +93,8 @@ fun MapPerfScreen(
         firstPosition = CameraPosition(target = FakeQuestData.START, zoom = 17.0)
     )
     var visiblePins by remember { mutableStateOf<List<Pin>>(emptyList()) }
+    val hoistedIconImage = remember { mutableStateOf<Expression<ImageValue>?>(null) }
+    val features = pinFeatures(visiblePins)
     var legLabel by remember { mutableStateOf("starting") }
 
     LaunchedEffect(Unit) {
@@ -147,11 +152,13 @@ fun MapPerfScreen(
                     languages = listOf(Locale.current.language),
                     aboveLabelsContent = {
                         // before the layers, and given a list that never changes, so it composes once
-                        PinIconWarmup(iconPool)
+                        PinIconImage(iconPool, hoistedIconImage)
                         PinsLayers(
                             pins = visiblePins,
                             onClickPin = {},
                             onZoomToCluster = {},
+                            iconImage = hoistedIconImage.value.takeIf { MapPerf.hoistIconExpression },
+                            prebuiltFeatures = features,
                         )
                     },
                 )

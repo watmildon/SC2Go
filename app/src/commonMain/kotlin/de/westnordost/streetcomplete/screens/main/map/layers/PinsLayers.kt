@@ -3,8 +3,12 @@ package de.westnordost.streetcomplete.screens.main.map.layers
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.key
+import androidx.compose.runtime.MutableState
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.DpOffset
@@ -18,7 +22,9 @@ import de.westnordost.streetcomplete.screens.main.map.MapPerf
 import de.westnordost.streetcomplete.screens.main.map.pinPainter
 import de.westnordost.streetcomplete.screens.main.map.toGeometry
 import de.westnordost.streetcomplete.ui.ktx.id
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.JsonObject
 import org.maplibre.spatialk.geojson.Feature
 import org.maplibre.spatialk.geojson.FeatureCollection
@@ -43,6 +49,8 @@ import org.maplibre.compose.expressions.dsl.plus
 import org.maplibre.compose.expressions.dsl.sp
 import org.maplibre.compose.expressions.dsl.switch
 import org.maplibre.compose.expressions.dsl.zoom
+import org.maplibre.compose.expressions.ast.Expression
+import org.maplibre.compose.expressions.value.ImageValue
 import org.maplibre.compose.expressions.value.TranslateAnchor
 import org.maplibre.compose.layers.CircleLayer
 import org.maplibre.compose.layers.SymbolLayer
@@ -61,6 +69,12 @@ fun PinsLayers(
     onClickPin: (properties: JsonObject) -> Unit,
     onZoomToCluster: (targetZoom: Double) -> Unit,
     visible: Boolean = true,
+    /** Built once by [PinIconImage] over every icon there can be, rather than here from whatever is
+     *  in view. When null this falls back to building it per icon set, which is what it used to do
+     *  and what the measurement compares against. */
+    iconImage: Expression<ImageValue>? = null,
+    /** Built off the main thread from the same pins. When null it is built here instead. */
+    prebuiltFeatures: FeatureCollection<Geometry, JsonObject?>? = null,
 ) {
     val coroutineScope = rememberCoroutineScope()
 
@@ -112,7 +126,7 @@ fun PinsLayers(
        constantly while the set of icon *kinds* barely moves, and building this costs tens of
        milliseconds on the main thread - it is one case per distinct icon, which is what
        maplibre-compose#468 forces (see below). That was the panning stutter. */
-    val iconImage = remember(pinIcons, pinPainters, fallbackPainter) {
+    val localIconImage = remember(pinIcons, pinPainters, fallbackPainter) {
         val mark = MapPerf.mark()
         val expression = switch(
             feature["icon-image"].convertToString(),
@@ -124,10 +138,14 @@ fun PinsLayers(
         MapPerf.logSince(mark) { "BUILD ICON EXPRESSION for ${pinIcons.size} icons" }
         expression
     }
+    val effectiveIconImage = iconImage ?: localIconImage
 
-    val featuresMark = MapPerf.mark()
-    val features = FeatureCollection(pins.map { it.toGeoJsonFeature() })
-    MapPerf.logSince(featuresMark) { "build ${pins.size} GeoJSON features" }
+    val features = prebuiltFeatures ?: run {
+        val featuresMark = MapPerf.mark()
+        val built = FeatureCollection(pins.map { it.toGeoJsonFeature() })
+        MapPerf.logSince(featuresMark) { "build ${pins.size} GeoJSON features" }
+        built
+    }
 
     val source = rememberGeoJsonSource(
         data = GeoJsonData.Features(features),
@@ -207,7 +225,7 @@ fun PinsLayers(
            https://github.com/maplibre/maplibre-compose/issues/468 and #18.
            So instead, declare every pin icon that is currently displayed as its own case, which
            is what makes MapLibre-Compose load them. */
-        iconImage = iconImage,
+        iconImage = effectiveIconImage,
         // constant icon size because click area would become a bit too small and more
         // importantly, dynamic size per zoom + collision doesn't work together well, it
         // results in a lot of flickering.
@@ -243,7 +261,7 @@ data class Pin(
     val order: Int = 0
 )
 
-private fun Pin.toGeoJsonFeature() =
+fun Pin.toGeoJsonFeature() =
     Feature(
         geometry = position.toGeometry(),
         /* must be a JsonObject and not just any Map: the GeoJSON serializer looks up the
@@ -256,3 +274,58 @@ private fun Pin.toGeoJsonFeature() =
             + (properties ?: emptyMap())
         )
     )
+
+/** Resolves every pin icon and builds the icon expression from them, once.
+ *
+ *  Panning does not change which icons *can* appear, only which ones happen to be on screen, so
+ *  there is no reason to rebuild any of this while panning — and rebuilding it is what made panning
+ *  cost anything. Given every icon up front, the painters are resolved once and the `switch` is
+ *  built once, and [PinsLayers] is handed the result.
+ *
+ *  It returns Unit and takes a list and a state holder that do not change, which makes it
+ *  skippable: it composes on the first pass and is skipped from then on, so the walk over the icons
+ *  happens exactly once no matter how much the pins change. Publishing through [output] rather than
+ *  returning the expression is what buys that — a composable that returns a value cannot be
+ *  skipped. */
+@Composable
+fun PinIconImage(
+    icons: List<DrawableResource>,
+    output: MutableState<Expression<ImageValue>?>,
+) {
+    val mark = MapPerf.mark()
+    val painters = icons.map { icon -> key(icon) { pinPainter(painterResource(icon)) } }
+    val fallbackPainter = pinPainter(painterResource(Res.drawable.quest_create_note))
+    val expression = remember(painters, fallbackPainter) {
+        switch(
+            feature["icon-image"].convertToString(),
+            *icons.mapIndexed { i, icon ->
+                case("pin_" + icon.id, image(painters[i]))
+            }.toTypedArray(),
+            fallback = image(fallbackPainter),
+        )
+    }
+    MapPerf.logSince(mark) { "HOIST: resolve+build for ${icons.size} icons" }
+    SideEffect { output.value = expression }
+}
+
+/** The pins as GeoJSON, built off the main thread.
+ *
+ *  Turning a pin into a feature allocates a JsonObject each, so it is linear in the number of pins
+ *  and was costing tens of milliseconds during composition with a few thousand of them in view.
+ *  None of it needs the main thread.
+ *
+ *  The result arrives a frame after the pins do, which is the price: the map draws the previous set
+ *  for one more frame rather than blocking to catch up. Returns null until the first set is ready,
+ *  which [PinsLayers] reads as "build it yourself". */
+@Composable
+fun pinFeatures(pins: Collection<Pin>): FeatureCollection<Geometry, JsonObject?>? {
+    if (!MapPerf.offThreadGeoJson) return null
+    return produceState<FeatureCollection<Geometry, JsonObject?>?>(null, pins) {
+        value = withContext(Dispatchers.Default) {
+            val mark = MapPerf.mark()
+            val features = FeatureCollection(pins.map { it.toGeoJsonFeature() })
+            MapPerf.logSince(mark) { "OFF-THREAD build ${pins.size} GeoJSON features" }
+            features
+        }
+    }.value
+}

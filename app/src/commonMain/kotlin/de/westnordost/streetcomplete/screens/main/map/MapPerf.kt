@@ -1,14 +1,11 @@
 package de.westnordost.streetcomplete.screens.main.map
 
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.key
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.withFrameNanos
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
-import org.jetbrains.compose.resources.DrawableResource
-import org.jetbrains.compose.resources.painterResource
 import de.westnordost.streetcomplete.util.ktx.format
 import de.westnordost.streetcomplete.util.logs.Log
 import kotlin.time.TimeSource
@@ -43,6 +40,20 @@ object MapPerf {
      *  about 0.09ms. So the cost worth removing is the first load, and the way to remove it is to
      *  do all of them once rather than to hold more of them open. `-warmicons NO` to compare. */
     var warmIcons: Boolean = true
+
+    /** Whether the icon expression is built once over a fixed set of icons and handed to
+     *  [de.westnordost.streetcomplete.screens.main.map.layers.PinsLayers], rather than rebuilt from
+     *  whatever is in view.
+     *
+     *  **Measured and rejected — off by default.** It was aimed at a cost that turned out not to
+     *  exist: rebuilding the expression is 5ms across a whole pan. Turning it on made PinsLayers
+     *  recompose 37 -> 1657 times over the same pan and took painter resolution from 515ms to
+     *  10,057ms. Why it recomposes that much is not understood, which is a second reason not to
+     *  ship it. Kept behind `-hoisticons YES` so the measurement can be repeated. */
+    var hoistIconExpression: Boolean = false
+
+    /** Whether the GeoJSON for the pins is built off the main thread. `-offthreadgeojson NO`. */
+    var offThreadGeoJson: Boolean = true
 
     const val TAG = "MapPerf"
 
@@ -166,23 +177,4 @@ fun MainThreadStallLogger(
             }
         }
     }
-}
-
-/** Loads every pin icon once, so that no pan is ever the first time one is seen.
- *
- *  Returns Unit and takes a stable list, which makes it skippable: it composes on the first pass
- *  and is skipped on every recomposition afterwards, so the painters are resolved exactly once and
- *  then stay resolved for as long as the map is on screen. That is the difference between this and
- *  simply widening the set [PinsLayers] draws from — that one re-walks every painter on every
- *  recomposition, this one walks them once.
- *
- *  It draws nothing. The point is only the side effect of having loaded them. */
-@Composable
-fun PinIconWarmup(icons: List<DrawableResource>) {
-    if (!MapPerf.warmIcons) return
-    val mark = MapPerf.mark()
-    for (icon in icons) {
-        key(icon) { pinPainter(painterResource(icon)) }
-    }
-    MapPerf.logSince(mark) { "WARM UP ${icons.size} pin icons" }
 }

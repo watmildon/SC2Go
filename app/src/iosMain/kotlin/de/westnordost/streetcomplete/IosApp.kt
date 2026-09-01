@@ -49,6 +49,12 @@ fun IosApp() {
         if (defaults.objectForKey("warmicons") != null) {
             MapPerf.warmIcons = defaults.boolForKey("warmicons")
         }
+        if (defaults.objectForKey("hoisticons") != null) {
+            MapPerf.hoistIconExpression = defaults.boolForKey("hoisticons")
+        }
+        if (defaults.objectForKey("offthreadgeojson") != null) {
+            MapPerf.offThreadGeoJson = defaults.boolForKey("offthreadgeojson")
+        }
     }
 
     var screen by remember { mutableStateOf(initialScreen) }

@@ -54,6 +54,14 @@ import org.maplibre.compose.util.MapClickHandler
 import org.maplibre.spatialk.geojson.FeatureCollection
 import org.maplibre.spatialk.geojson.Geometry
 import org.maplibre.spatialk.geojson.Position
+import androidx.compose.runtime.mutableStateOf
+import de.westnordost.streetcomplete.data.AllEditTypes
+import de.westnordost.streetcomplete.resources.quest_create_note
+import de.westnordost.streetcomplete.resources.quest_notes
+import de.westnordost.streetcomplete.screens.main.map.layers.PinIconImage
+import de.westnordost.streetcomplete.screens.main.map.layers.pinFeatures
+import org.maplibre.compose.expressions.ast.Expression
+import org.maplibre.compose.expressions.value.ImageValue
 
 /**
  * MapLibre Map with StreetComplete theme and all the StreetComplete specific things displayed on
@@ -110,6 +118,12 @@ fun MainMap(
     val editHistoryPins by viewModel.editHistoryPins.collectAsState()
     val styledElements by viewModel.styleableElements.collectAsState()
     val questPins by viewModel.questPins.collectAsState()
+
+    /* Turning pins into GeoJSON is linear in the number of pins and was being done during
+       composition, on the main thread, every time the pins changed - tens of milliseconds with a
+       few thousand pins in view. Nothing about it needs the main thread. */
+    val questFeatures = pinFeatures(questPins)
+    val editHistoryFeatures = pinFeatures(editHistoryPins)
 
     // because quests highlight additional information and history sidebar should feel clean
     val showOverlay = shownBottomSheet !is ShownBottomSheet.OsmQuest &&
@@ -267,11 +281,18 @@ fun MainMap(
 
                    It draws nothing, and it is given a list that never changes, so it composes once
                    and is skipped from then on. */
-                val questTypeRegistry: QuestTypeRegistry = koinInject()
-                val allPinIcons = remember(questTypeRegistry) {
-                    questTypeRegistry.map { it.icon }.distinct()
+                /* Every icon a pin can ever have - all quest types and overlays, plus the two
+                   icons note edits use - resolved once, with the icon expression built from them
+                   once. Panning changes which of them are on screen but never which exist, so
+                   there is nothing here for a pan to invalidate. See research/MAP_PIN_PERF.md. */
+                val allEditTypes: AllEditTypes = koinInject()
+                val allPinIcons = remember(allEditTypes) {
+                    (allEditTypes.map { it.icon } +
+                        listOf(Res.drawable.quest_create_note, Res.drawable.quest_notes)).distinct()
                 }
-                PinIconWarmup(allPinIcons)
+                val hoistedIconImage = remember { mutableStateOf<Expression<ImageValue>?>(null) }
+                PinIconImage(allPinIcons, hoistedIconImage)
+                val iconImage = hoistedIconImage.value.takeIf { MapPerf.hoistIconExpression }
 
                 // normal quest pins are not shown while edit history sidebar is open
                 if (isShowingUndoHistorySidebar) {
@@ -280,7 +301,9 @@ fun MainMap(
                         onClickPin = { properties ->
                             viewModel.getEditKey(properties)?.let { onClickEdit(it) }
                         },
-                        onZoomToCluster = ::zoomToCluster
+                        onZoomToCluster = ::zoomToCluster,
+                        iconImage = iconImage,
+                        prebuiltFeatures = editHistoryFeatures,
                     )
                 } else {
                     /* hidden rather than removed: leaving the composition would throw away the
@@ -294,6 +317,8 @@ fun MainMap(
                         },
                         onZoomToCluster = ::zoomToCluster,
                         visible = showQuestPins,
+                        iconImage = iconImage,
+                        prebuiltFeatures = questFeatures,
                     )
                 }
 
