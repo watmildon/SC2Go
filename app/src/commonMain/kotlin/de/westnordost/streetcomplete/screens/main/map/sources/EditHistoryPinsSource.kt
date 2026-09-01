@@ -37,7 +37,7 @@ class EditHistoryPinsSource(
         /* The three callbacks below arrive on three different threads - onAdded on whichever
            coroutine stored the answer, onDeleted on the uploader's and on the cleaner's,
            onInvalidated on a third - and they all reach this one map. Unguarded that is the same
-           concurrent-HashMap corruption as the caches fixed in e8295e70b and 3a5f83f21, on the
+           concurrent-HashMap corruption as the caches fixed in 259b11ae8 and 6135edd27, on the
            rhythm of ordinary surveying: answering a quest while an upload started seconds ago is
            deleting synced edits.
 
