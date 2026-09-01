@@ -1,5 +1,6 @@
 package de.westnordost.streetcomplete
 
+import com.russhwolf.settings.SettingsListener
 import de.westnordost.streetcomplete.data.CacheTrimmer
 import de.westnordost.streetcomplete.data.Cleaner
 import de.westnordost.streetcomplete.data.FeedsUpdater
@@ -12,6 +13,7 @@ import de.westnordost.streetcomplete.util.ktx.nowAsEpochMilliseconds
 import de.westnordost.streetcomplete.util.logs.DatabaseLogger
 import de.westnordost.streetcomplete.util.logs.KermitLogger
 import de.westnordost.streetcomplete.util.logs.Log
+import de.westnordost.streetcomplete.util.observeSelectedLanguage
 import kotlin.experimental.ExperimentalNativeApi
 import kotlin.native.setUnhandledExceptionHook
 import kotlinx.coroutines.CoroutineExceptionHandler
@@ -61,6 +63,12 @@ fun initApp() {
     koin.get<ResurveyIntervalsUpdater>().update()
 
     val prefs = koin.get<Preferences>()
+
+    /* Android applies the selected language in Application.onCreate with LocaleList.setDefault and
+       again per activity. On iOS it is written to the AppleLanguages user default instead, which
+       iOS reads at launch - so this both applies the pending selection and keeps it in sync. */
+    selectedLanguageListener = observeSelectedLanguage(prefs)
+
     val lastVersion = prefs.lastDataVersion
     if (BuildConfig.VERSION_NAME != lastVersion) {
         prefs.lastDataVersion = BuildConfig.VERSION_NAME
@@ -71,6 +79,10 @@ fun initApp() {
     // Android does this by overriding onTrimMemory instead, i.e. not as part of onCreate
     observeMemoryPressure(koin.get<CacheTrimmer>())
 }
+
+/** Held for the life of the process: [Preferences] only keeps a weak reference to its listeners,
+ *  so a local would be collected and the language would stop being applied. */
+private var selectedLanguageListener: SettingsListener? = null
 
 /** Lives as long as the process does: there is no iOS equivalent of Application.onTerminate to
  *  cancel it in, the process is simply killed. */

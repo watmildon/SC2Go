@@ -42,6 +42,8 @@ import de.westnordost.streetcomplete.ui.common.BackIcon
 import de.westnordost.streetcomplete.ui.common.ExpandableSearchField
 import de.westnordost.streetcomplete.ui.common.SearchIcon
 import de.westnordost.streetcomplete.ui.common.TopAppBarWithContent
+import de.westnordost.streetcomplete.ui.common.dialogs.InfoDialog
+import de.westnordost.streetcomplete.util.isLanguageChangePending
 import de.westnordost.streetcomplete.util.ktx.getDisplayName
 import org.jetbrains.compose.resources.stringResource
 
@@ -58,6 +60,11 @@ fun LanguageSelectionScreen(
     } }
 
     var searchText by rememberSaveable { mutableStateOf("") }
+
+    /* On iOS the app has to be relaunched before the new language shows, so say so - otherwise
+       picking a language looks like it did nothing. Never set on Android, where it applies at
+       once. */
+    var showRestartRequired by remember { mutableStateOf(false) }
 
     // languages are sorted alphabetically by their display name
     val sortedAndFilteredSelectableLanguages by remember { derivedStateOf {
@@ -79,11 +86,21 @@ fun LanguageSelectionScreen(
         LanguageSelectionList(
             languages = sortedAndFilteredSelectableLanguages,
             selectedLanguage = selectedLanguage,
-            onSelect = { viewModel.setSelectedLanguage(it) },
+            onSelect = {
+                viewModel.setSelectedLanguage(it)
+                showRestartRequired = isLanguageChangePending(it)
+            },
             modifier = Modifier
                 .fillMaxHeight()
                 .consumeWindowInsets(insets),
             contentPadding = insets
+        )
+    }
+
+    if (showRestartRequired) {
+        InfoDialog(
+            onDismissRequest = { showRestartRequired = false },
+            text = { Text(stringResource(Res.string.language_restart_required)) },
         )
     }
 }

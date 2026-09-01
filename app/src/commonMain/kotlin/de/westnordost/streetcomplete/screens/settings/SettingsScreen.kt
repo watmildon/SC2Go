@@ -172,22 +172,16 @@ fun SettingsScreen(
 
             PreferenceCategory(stringResource(Res.string.pref_category_display)) {
 
-                /* Not on iOS: the selected language is applied there with
-                   LocaleList.setDefault, which does not exist on iOS, and Compose Multiplatform
-                   keeps the equivalent internal. Rather than offer a setting that silently does
-                   nothing, it is not offered. */
-                if (BuildConfig.PLATFORM != "ios") {
-                    Preference(
-                        name = stringResource(Res.string.pref_title_language_select2),
-                        onClick = onClickLanguageSelection,
-                    ) {
-                        Text(
-                            text = selectedLanguage?.let { getLanguageDisplayName(it) }
-                                ?: stringResource(Res.string.language_default),
-                            modifier = Modifier.weight(1f, fill = false)
-                        )
-                        NextScreenIcon()
-                    }
+                Preference(
+                    name = stringResource(Res.string.pref_title_language_select2),
+                    onClick = onClickLanguageSelection,
+                ) {
+                    Text(
+                        text = selectedLanguage?.let { getLanguageDisplayName(it) }
+                            ?: stringResource(Res.string.language_default),
+                        modifier = Modifier.weight(1f, fill = false)
+                    )
+                    NextScreenIcon()
                 }
 
                 Preference(

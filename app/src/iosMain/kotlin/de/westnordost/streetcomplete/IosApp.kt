@@ -22,10 +22,13 @@ import de.westnordost.streetcomplete.screens.main.IosMainScreen
 import de.westnordost.streetcomplete.screens.main.map.MapPerf
 import de.westnordost.streetcomplete.screens.settings.debug.MapPerfScreen
 import de.westnordost.streetcomplete.screens.settings.debug.ShowMapScreen
+import de.westnordost.streetcomplete.screens.settings.language_selection.LanguageSelectionScreen
 import org.koin.compose.viewmodel.koinViewModel
 import platform.Foundation.NSUserDefaults
 
-private enum class Screen { Changelog, Credits, PrivacyStatement, ShowMap, MapPerf, Main }
+private enum class Screen {
+    Changelog, Credits, PrivacyStatement, LanguageSelection, ShowMap, MapPerf, Main
+}
 
 /** Allows opening a screen directly for development, e.g.
  *  xcrun simctl launch booted <bundle id> -screen Changelog */
@@ -71,6 +74,10 @@ fun IosApp() {
                 onClickBack = { screen = null },
             )
             Screen.PrivacyStatement -> PrivacyStatementScreen(
+                onClickBack = { screen = null },
+            )
+            Screen.LanguageSelection -> LanguageSelectionScreen(
+                viewModel = koinViewModel(),
                 onClickBack = { screen = null },
             )
             Screen.ShowMap -> ShowMapScreen(
