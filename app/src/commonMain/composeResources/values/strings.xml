@@ -569,7 +569,6 @@
 
     <string name="pref_title_language_select2">Language</string>
     <string name="language_default">System default</string>
-    <string name="language_restart_required">The language will change the next time you open StreetComplete.</string>
 
     <string name="pref_title_theme_select">Theme</string>
     <string name="theme_light">Light</string>

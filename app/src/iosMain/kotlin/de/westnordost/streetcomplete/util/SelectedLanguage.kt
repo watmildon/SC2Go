@@ -6,32 +6,27 @@ import platform.Foundation.NSLocale
 import platform.Foundation.NSUserDefaults
 import platform.Foundation.preferredLanguages
 
-/** iOS decides which language the app runs in before any of our code runs, by reading the
- *  `AppleLanguages` user default. Writing that default into the app's *own* domain overrides the
- *  system-wide list for this app alone, which is the closest thing iOS has to what
- *  `LocaleList.setDefault(getSelectedLocales(prefs))` does on Android.
+/** iOS decides which language the app runs in by reading the `AppleLanguages` user default.
+ *  Writing that default into the app's *own* domain overrides the system-wide list for this app
+ *  alone, which is the closest thing iOS has to what `LocaleList.setDefault(getSelectedLocales)`
+ *  does on Android.
  *
  *  It reaches as far as the Android call does: Compose Multiplatform resolves string resources
  *  through NSLocale, and so do NumberFormatter/LocalDateFormatter and the feature dictionary, so
  *  one write moves all of them.
  *
- *  Written at startup it applies to that same launch - NSLocale is read live, and the first
- *  composition happens well after `initApp`. Changed while the app is running it does not: what is
- *  already composed keeps the language it resolved with, and nothing invalidates it. So a change
- *  made in the settings shows fully only on the next launch - see [isLanguageChangePending].
+ *  NSLocale reads the default live, so this applies to the running process rather than only to the
+ *  next launch - but only to what is composed *after* it. Rebuilding what is already on screen is
+ *  `WithSelectedLanguage` in `MainViewController`; the two together are what
+ *  `LocaleList.setDefault` plus `ActivityCompat.recreate` do on Android.
  *
- *  The alternative would have been Compose Multiplatform's own `LocalComposeEnvironment`, which
- *  would apply without a relaunch, but it is still internal as of 1.12.0:
+ *  Compose Multiplatform's own `LocalComposeEnvironment` would have been the more direct hook, but
+ *  it is still internal as of 1.12.0:
  *
  *      Cannot access 'val LocalComposeEnvironment': it is internal in file.
  *
  *  and it would only have covered the string resources, not the formatters or the dictionary. */
 private const val APPLE_LANGUAGES = "AppleLanguages"
-
-/** The selection as it was when iOS resolved the app's language, i.e. the language the app is
- *  actually running in. Read before anything writes to [APPLE_LANGUAGES] this session. */
-private var languageAtStart: String? = null
-private var isObserving = false
 
 /** The languages the user would get if nothing were selected in the app. Read once at start, both
  *  because it cannot change while the app runs and to keep the work out of the change listener. */
@@ -45,17 +40,11 @@ private var isApplying = false
 /** Applies the selected language now and on every later change, and returns the listener that
  *  keeps doing so. The caller has to hold on to it: preferences only keep a weak reference. */
 fun observeSelectedLanguage(prefs: Preferences): SettingsListener {
-    languageAtStart = prefs.language
-    systemLanguages = readSystemLanguages(languageAtStart)
-    isObserving = true
-    applySelectedLanguage(prefs.language)
+    val selected = prefs.language
+    systemLanguages = readSystemLanguages(selected)
+    applySelectedLanguage(selected)
     return prefs.onLanguageChanged { applySelectedLanguage(it) }
 }
-
-/** Whether the selected language has changed since the app launched, i.e. the app is still showing
- *  the previous one and has to be restarted before the change is visible. */
-actual fun isLanguageChangePending(selectedLanguage: String?): Boolean =
-    isObserving && selectedLanguage != languageAtStart
 
 private fun applySelectedLanguage(language: String?) {
     if (isApplying) return
