@@ -3,6 +3,7 @@ package de.westnordost.streetcomplete.screens.main.map.layers
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.graphics.Color
@@ -13,6 +14,7 @@ import de.westnordost.streetcomplete.data.osm.mapdata.LatLon
 import de.westnordost.streetcomplete.resources.Res
 import de.westnordost.streetcomplete.resources.map_pin_circle
 import de.westnordost.streetcomplete.resources.quest_create_note
+import de.westnordost.streetcomplete.screens.main.map.MapPerf
 import de.westnordost.streetcomplete.screens.main.map.pinPainter
 import de.westnordost.streetcomplete.screens.main.map.toGeometry
 import de.westnordost.streetcomplete.ui.ktx.id
@@ -62,30 +64,73 @@ fun PinsLayers(
 ) {
     val coroutineScope = rememberCoroutineScope()
 
-    val pinIcons = remember(pins) { pins.map { it.icon }.distinct() }
+    /* Every icon that has been on screen at any point, not only the ones on screen now.
+       Resolving a pin painter decodes a vector drawable and costs about a millisecond; dropping it
+       the moment its quest type pans out of view means paying that again the moment it pans back,
+       which while panning is constantly. Keeping them all composed trades memory - one rasterised
+       pin per quest type in MapLibre's atlas - for never decoding the same icon twice.
+
+       MainMap already relies on the same property one level up, where it hides the pin layers
+       rather than removing them so that opening a form does not re-decode every icon. */
+    val knownIcons = remember { mutableListOf<DrawableResource>() }
+    val pinIcons = remember(pins) {
+        val mark = MapPerf.mark()
+        val inView = pins.map { it.icon }.distinct()
+        val added = inView.filterNot { it in knownIcons }
+        knownIcons.addAll(added)
+        MapPerf.logSince(mark) {
+            "distinct icons: ${inView.size} in view of ${pins.size} pins" +
+            ", known ${knownIcons.size}" + (if (added.isNotEmpty()) ", ${added.size} new" else "")
+        }
+        /* A fresh list, but an equal one whenever nothing was added - so the expression and the
+           painters below, which are remembered on it, are only rebuilt when the set really grew. */
+        if (MapPerf.keepIconsLive) knownIcons.toList() else inView
+    }
+
+    /* Logged separately from the rebuild below because this is its *cause*: the expression and the
+       images are only rebuilt when this set grows, so knowing which icons arrived says which quest
+       type coming into view was worth the work. Once it has stopped growing, panning is free. */
+    val previousIcons = remember { mutableStateOf(emptyList<DrawableResource>()) }
+    if (pinIcons != previousIcons.value) {
+        val added = pinIcons - previousIcons.value.toSet()
+        MapPerf.log {
+            "known icon set grew: ${previousIcons.value.size} -> ${pinIcons.size}" +
+            (if (added.isNotEmpty()) ", added " + added.joinToString(",") { it.id.orEmpty() } else "")
+        }
+        previousIcons.value = pinIcons
+    }
 
     /* Keyed on the icon rather than positionally: pinIcons grows as new kinds of quest come into
        view while panning, and a positional remember would shift every slot after the new one and
        reload all of those painters. */
+    val paintersMark = MapPerf.mark()
     val pinPainters = pinIcons.map { icon -> key(icon) { pinPainter(painterResource(icon)) } }
     val fallbackPainter = pinPainter(painterResource(Res.drawable.quest_create_note))
+    MapPerf.logSince(paintersMark) { "resolve ${pinPainters.size} pin painters" }
 
     /* Remembered on the icons, not rebuilt with every change to the pins. Panning changes the pins
        constantly while the set of icon *kinds* barely moves, and building this costs tens of
        milliseconds on the main thread - it is one case per distinct icon, which is what
        maplibre-compose#468 forces (see below). That was the panning stutter. */
     val iconImage = remember(pinIcons, pinPainters, fallbackPainter) {
-        switch(
+        val mark = MapPerf.mark()
+        val expression = switch(
             feature["icon-image"].convertToString(),
             *pinIcons.mapIndexed { i, icon ->
                 case("pin_" + icon.id, image(pinPainters[i]))
             }.toTypedArray(),
             fallback = image(fallbackPainter),
         )
+        MapPerf.logSince(mark) { "BUILD ICON EXPRESSION for ${pinIcons.size} icons" }
+        expression
     }
 
+    val featuresMark = MapPerf.mark()
+    val features = FeatureCollection(pins.map { it.toGeoJsonFeature() })
+    MapPerf.logSince(featuresMark) { "build ${pins.size} GeoJSON features" }
+
     val source = rememberGeoJsonSource(
-        data = GeoJsonData.Features(FeatureCollection(pins.map { it.toGeoJsonFeature() })),
+        data = GeoJsonData.Features(features),
         options = GeoJsonOptions(
             cluster = true,
             clusterMaxZoom = CLUSTER_MAX_ZOOM,

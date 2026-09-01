@@ -19,11 +19,13 @@ import de.westnordost.streetcomplete.screens.about.ChangelogScreen
 import de.westnordost.streetcomplete.screens.about.CreditsScreen
 import de.westnordost.streetcomplete.screens.about.PrivacyStatementScreen
 import de.westnordost.streetcomplete.screens.main.IosMainScreen
+import de.westnordost.streetcomplete.screens.main.map.MapPerf
+import de.westnordost.streetcomplete.screens.settings.debug.MapPerfScreen
 import de.westnordost.streetcomplete.screens.settings.debug.ShowMapScreen
 import org.koin.compose.viewmodel.koinViewModel
 import platform.Foundation.NSUserDefaults
 
-private enum class Screen { Changelog, Credits, PrivacyStatement, ShowMap, Main }
+private enum class Screen { Changelog, Credits, PrivacyStatement, ShowMap, MapPerf, Main }
 
 /** Allows opening a screen directly for development, e.g.
  *  xcrun simctl launch booted <bundle id> -screen Changelog */
@@ -35,6 +37,20 @@ private val initialScreen: Screen?
  *  already, until the real main screen works on iOS */
 @Composable
 fun IosApp() {
+    /* So the map's instrumentation can also be turned on for the *real* main screen, not only the
+       stress test: xcrun simctl launch booted <bundle id> -screen Main -mapperf YES */
+    remember {
+        val defaults = NSUserDefaults.standardUserDefaults
+        MapPerf.enabled = defaults.boolForKey("mapperf")
+        // absent means on; only an explicit -keepiconslive NO turns it off, for A/B measurement
+        if (defaults.objectForKey("keepiconslive") != null) {
+            MapPerf.keepIconsLive = defaults.boolForKey("keepiconslive")
+        }
+        if (defaults.objectForKey("warmicons") != null) {
+            MapPerf.warmIcons = defaults.boolForKey("warmicons")
+        }
+    }
+
     var screen by remember { mutableStateOf(initialScreen) }
 
     Surface(Modifier.fillMaxSize()) {
@@ -52,6 +68,9 @@ fun IosApp() {
                 onClickBack = { screen = null },
             )
             Screen.ShowMap -> ShowMapScreen(
+                onClickBack = { screen = null },
+            )
+            Screen.MapPerf -> MapPerfScreen(
                 onClickBack = { screen = null },
             )
             Screen.Main -> IosMainScreen()
