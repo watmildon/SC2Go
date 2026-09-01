@@ -17,6 +17,7 @@ import de.westnordost.streetcomplete.data.location.Location
 import de.westnordost.streetcomplete.data.osm.mapdata.ElementKey
 import de.westnordost.streetcomplete.data.osm.mapdata.LatLon
 import de.westnordost.streetcomplete.data.quest.QuestKey
+import de.westnordost.streetcomplete.data.quest.QuestTypeRegistry
 import de.westnordost.streetcomplete.resources.Res
 import de.westnordost.streetcomplete.util.math.distanceTo
 import de.westnordost.streetcomplete.screens.main.ShownBottomSheet
@@ -38,6 +39,7 @@ import de.westnordost.streetcomplete.screens.main.map.layers.toGeoJsonFeatures
 import kotlinx.coroutines.launch
 import org.koin.compose.viewmodel.koinViewModel
 import org.maplibre.compose.camera.CameraPosition
+import org.koin.compose.koinInject
 import org.maplibre.compose.camera.CameraState
 import org.maplibre.compose.camera.rememberCameraState
 import org.maplibre.compose.map.MaplibreMap
@@ -255,6 +257,21 @@ fun MainMap(
                 if (location != null) {
                     CurrentLocationLayers(location = location, rotation = rotation())
                 }
+
+                /* Load every quest icon once, before any of them is needed. Resolving a pin icon
+                   the first time costs about a millisecond and finding one already loaded about a
+                   tenth of that, so the cost worth removing is the first sight of an icon - which
+                   while panning arrives in bursts, as a new kind of quest comes into view. Measured
+                   over a fixed pan: the worst single hitch went from 128ms to 41ms, for one 165ms
+                   at map open. See research/MAP_PIN_PERF.md.
+
+                   It draws nothing, and it is given a list that never changes, so it composes once
+                   and is skipped from then on. */
+                val questTypeRegistry: QuestTypeRegistry = koinInject()
+                val allPinIcons = remember(questTypeRegistry) {
+                    questTypeRegistry.map { it.icon }.distinct()
+                }
+                PinIconWarmup(allPinIcons)
 
                 // normal quest pins are not shown while edit history sidebar is open
                 if (isShowingUndoHistorySidebar) {
