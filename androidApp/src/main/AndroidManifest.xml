@@ -78,7 +78,7 @@
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
-                <data android:scheme="streetcomplete" />
+                <data android:scheme="sc2go" />
             </intent-filter>
         </activity>
         <activity

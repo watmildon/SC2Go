@@ -1,5 +1,6 @@
 package de.westnordost.streetcomplete.data.urlconfig
 
+import de.westnordost.streetcomplete.ForkConfig
 import de.westnordost.streetcomplete.data.overlay.TestOverlayA
 import de.westnordost.streetcomplete.data.overlay.TestOverlayB
 import de.westnordost.streetcomplete.data.overlay.TestOverlayC
@@ -57,7 +58,7 @@ internal class UrlConfigKtTest {
     @Test fun `parse config using custom url scheme`() {
         assertEquals(
             UrlConfig("Test", listOf(q0, q2, q3), emptyList(), emptyList(), null),
-            parseConfigUrl("streetcomplete://s?n=Test&q=d", quests, overlays)
+            parseConfigUrl("${ForkConfig.URL_SCHEME}://s?n=Test&q=d", quests, overlays)
         )
     }
 

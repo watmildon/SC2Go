@@ -29,27 +29,34 @@ object ForkConfig {
      *  it used to be derived from this name and deliberately no longer is. */
     const val APP_NAME = "StreetComplete"
 
-    /** The OAuth 2 client registered on openstreetmap.org. This is what the user is shown when
-     *  they are asked to grant the app write access to their account, so while it is upstream's
-     *  client id, everyone logging in is told they are authorising *StreetComplete*.
+    /** This fork's own OAuth 2 client, registered on openstreetmap.org. It is what the user is
+     *  shown when asked to grant write access to their OSM account, so it is the difference between
+     *  them being told they are authorising this app or authorising *StreetComplete*.
      *
-     *  Replace with this fork's own registered client. [OAUTH2_REDIRECT_URI_SCHEME] has to match
-     *  the redirect URI registered against it. */
-    const val OAUTH2_CLIENT_ID_LIVE = "Yyk4PmTopczrr3BWZYvLK_M-KBloCQwXgPGEzqUYTc8"
+     *  Registered as a public client - the app uses PKCE (S256) and ships no secret - with
+     *  `read_prefs`, `write_api`, `write_notes` and `write_gpx`, and with `sc2go://oauth` as the
+     *  redirect URI, so it is tied to [URL_SCHEME]: changing one without the other breaks login. */
+    const val OAUTH2_CLIENT_ID_LIVE = "Ap2iMgPyv-xsSyi0uotnEdMp0QLO08RAyqbQUBj3FZQ"
 
     /** As [OAUTH2_CLIENT_ID_LIVE], for `master.apis.dev.openstreetmap.org`. Only used when
-     *  `ApplicationConstants.USE_TEST_API` is on. */
+     *  `ApplicationConstants.USE_TEST_API` is on.
+     *
+     *  Still upstream's, and unlike the live one it has *not* been re-registered: its redirect URI
+     *  is `streetcomplete://oauth`, which is no longer this app's scheme. Turning USE_TEST_API on
+     *  will therefore fail at login until a client is registered on the dev server with a
+     *  `sc2go://oauth` redirect. */
     const val OAUTH2_CLIENT_ID_TEST = "ObZ7yPf4lfs4XJ3NWysI3ukJMN0SHey1oPnNQnLmvw8"
 
     /** The app's custom URL scheme, used for the OAuth callback (`<scheme>://oauth`) and for quest
      *  preset sharing links (`<scheme>://s`).
      *
-     *  A scheme is first come, first served on a device: while this is `streetcomplete`, a user who
-     *  has the real StreetComplete installed as well may have their OAuth callback delivered to the
-     *  wrong app, and which one wins is not defined. Changing it means changing, together:
-     *  this constant, `CFBundleURLSchemes` in `iosApp/iosApp/Info.plist`, the Android manifest's
-     *  intent filter, and the redirect URI registered against the OAuth client above. */
-    const val URL_SCHEME = "streetcomplete"
+     *  A scheme is first come, first served on a device and which app wins is undefined, which is
+     *  why this is no longer `streetcomplete`: a user with the real StreetComplete installed could
+     *  otherwise have had their OAuth callback delivered to it. Changing it means changing,
+     *  together: this constant, `CFBundleURLSchemes` in `iosApp/iosApp/Info.plist`, the Android
+     *  manifest's intent filter, `UrlConfigKtTest`, and the redirect URI registered against the
+     *  OAuth client above - which is currently `sc2go://oauth`. */
+    const val URL_SCHEME = "sc2go"
 
     // -------------------------------------------------------------------- borrowed services ----
 

@@ -21,10 +21,10 @@
             <key>CFBundleTypeRole</key>
             <string>Editor</string>
             <key>CFBundleURLName</key>
-            <string>de.westnordost.streetcomplete</string>
+            <string>com.watmildon.sc2go</string>
             <key>CFBundleURLSchemes</key>
             <array>
-                <string>streetcomplete</string>
+                <string>sc2go</string>
                 <string>geo</string>
             </array>
         </dict>
