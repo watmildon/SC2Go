@@ -3,7 +3,6 @@ package de.westnordost.streetcomplete.screens.main.map.layers
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
-import org.maplibre.compose.util.DpPadding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
@@ -22,6 +21,7 @@ import org.maplibre.compose.expressions.dsl.image
 import org.maplibre.compose.layers.SymbolLayer
 import org.maplibre.compose.sources.GeoJsonData
 import org.maplibre.compose.sources.rememberGeoJsonSource
+import org.maplibre.compose.util.DpPadding
 import org.maplibre.compose.util.MaplibreComposable
 
 /** Displays "selected" pins. Those pins should always be shown on top of pins displayed by

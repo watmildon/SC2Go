@@ -8,12 +8,16 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import de.westnordost.streetcomplete.resources.*
 import org.jetbrains.compose.resources.painterResource
 import org.jetbrains.compose.resources.stringResource
-import androidx.compose.ui.tooling.preview.Preview
 
+// TODO maplibre-compose: After the Android map is replaced, while the implementation of this
+//                        compass button should maybe not be be re-based on top of the compass
+//                        button in maplibre-compose, at least have a look whether it makes sense
+//                        to for example pass the camera state here
 /** Map button showing current compass orientation in relation to the map. Invisible if north-up and
  *  no tilt */
 @Composable

@@ -38,11 +38,10 @@ class CountryInfos(private val res: Res) {
     private fun get(regionCode: String): IncompleteCountryInfo? =
         lock.withLock { countryInfos.getOrPut(regionCode) { lazy { load(regionCode) } } }.value
 
-    private fun load(regionCode: String): IncompleteCountryInfo? {
-        return runBlocking {
+    private fun load(regionCode: String): IncompleteCountryInfo? =
+        runBlocking {
             res.readYamlOrNull<IncompleteCountryInfo>("files/country_metadata/$regionCode.yml", yaml)
         }
-    }
 }
 
 fun CountryInfos.get(countryBoundaries: CountryBoundaries, position: LatLon): CountryInfo =

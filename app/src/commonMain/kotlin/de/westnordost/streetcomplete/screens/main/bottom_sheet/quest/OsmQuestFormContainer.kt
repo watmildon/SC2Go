@@ -67,6 +67,7 @@ import org.koin.compose.koinInject
  *
  *  @param onSetMapMarkers is called when the form shown wishes to show markers on the map. E.g. the
  *         split way form and level form shows markers
+ *
  *  @param getOffset returns the offset on the screen of the given position. E.g. the split way
  *         form uses it to draw the scissors where the way would be cut.
  *  @param lastMapClick where the user last clicked the map itself. The forms that ask for a name

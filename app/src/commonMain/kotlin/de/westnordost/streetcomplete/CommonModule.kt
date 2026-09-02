@@ -166,10 +166,10 @@ import de.westnordost.streetcomplete.screens.about.CreditsViewModel
 import de.westnordost.streetcomplete.screens.about.CreditsViewModelImpl
 import de.westnordost.streetcomplete.screens.about.logs.LogsViewModel
 import de.westnordost.streetcomplete.screens.about.logs.LogsViewModelImpl
-import de.westnordost.streetcomplete.screens.main.MainViewModel
-import de.westnordost.streetcomplete.screens.main.MainViewModelImpl
 import de.westnordost.streetcomplete.screens.main.MainBottomSheetViewModel
 import de.westnordost.streetcomplete.screens.main.MainBottomSheetViewModelImpl
+import de.westnordost.streetcomplete.screens.main.MainViewModel
+import de.westnordost.streetcomplete.screens.main.MainViewModelImpl
 import de.westnordost.streetcomplete.screens.main.edithistory.EditHistoryViewModel
 import de.westnordost.streetcomplete.screens.main.edithistory.EditHistoryViewModelImpl
 import de.westnordost.streetcomplete.screens.main.map.MainMapViewModel
@@ -279,7 +279,6 @@ val commonModule = module {
 
     single<UploadProgressSource> { get<Uploader>() }
 
-
     // download
 
     factory { DownloadedTilesDao(get()) }
@@ -294,7 +293,6 @@ val commonModule = module {
     single { DownloadedTilesController(get()) }
 
     factory { FeedsUpdater(get(), get(), get(), get(), get()) }
-
 
     // OSM API client
 
@@ -599,7 +597,7 @@ val commonModule = module {
     viewModel<MainViewModel> {
         MainViewModelImpl(
             get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(),
-            get(), get(), get(), get(), get(), get(), get(), get(), get(), get(),
+            get(), get(), get(), get(), get(), get(), get(), get(), get(),
         )
     }
 

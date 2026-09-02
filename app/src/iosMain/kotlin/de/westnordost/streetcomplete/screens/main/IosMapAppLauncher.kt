@@ -1,5 +1,6 @@
 package de.westnordost.streetcomplete.screens.main
 
+import androidx.compose.runtime.Composable
 import de.westnordost.streetcomplete.data.osm.mapdata.LatLon
 import kotlinx.cinterop.ExperimentalForeignApi
 import platform.CoreGraphics.CGRectGetMidX
@@ -107,3 +108,6 @@ object IosMapAppLauncher : MapAppLauncher {
         )
     )
 }
+
+@Composable
+actual fun rememberMapAppLauncher(): MapAppLauncher = IosMapAppLauncher
