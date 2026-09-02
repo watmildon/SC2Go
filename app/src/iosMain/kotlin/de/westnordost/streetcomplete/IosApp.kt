@@ -38,10 +38,17 @@ private val ScreenSaver = Saver<Screen?, String>(
 )
 
 /** Allows opening a screen directly for development, e.g.
- *  xcrun simctl launch booted <bundle id> -screen Changelog */
+ *  xcrun simctl launch booted <bundle id> -screen Changelog
+ *
+ *  Only in debug builds. A release build goes straight to the main screen: the launcher is a
+ *  developer menu, and one of the screens it lists - ShowMap - is a debug screen, so honouring the
+ *  argument at all in release would leave a way into it. */
 private val initialScreen: Screen?
-    get() = NSUserDefaults.standardUserDefaults.stringForKey("screen")
-        ?.let { name -> Screen.entries.find { it.name == name } }
+    get() {
+        if (!BuildConfig.DEBUG) return Screen.Main
+        return NSUserDefaults.standardUserDefaults.stringForKey("screen")
+            ?.let { name -> Screen.entries.find { it.name == name } }
+    }
 
 /** Temporary launcher to try out the screens that have been migrated to Compose Multiplatform
  *  already, until the real main screen works on iOS */
@@ -74,7 +81,10 @@ fun IosApp() {
 
     Surface(Modifier.fillMaxSize()) {
         when (screen) {
-            null -> LauncherScreen(onClickScreen = { screen = it })
+            // unreachable in release, where initialScreen is Main and nothing sets it back to null
+            null ->
+                if (BuildConfig.DEBUG) LauncherScreen(onClickScreen = { screen = it })
+                else IosMainScreen()
             Screen.Changelog -> ChangelogScreen(
                 viewModel = koinViewModel(),
                 onClickBack = { screen = null },
