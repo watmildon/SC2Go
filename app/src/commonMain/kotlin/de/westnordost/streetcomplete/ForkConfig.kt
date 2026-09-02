@@ -60,10 +60,32 @@ object ForkConfig {
 
     // -------------------------------------------------------------------- borrowed services ----
 
-    /* The four services below run on upstream's infrastructure at streetcomplete.app. Upstream has
-       said this fork may use the photo endpoint and the map tile key. They are gathered here so
-       that pointing them somewhere else is a one-line change per service if that ever changes, or
-       if the traffic from this fork ever becomes enough to be worth not sending them. */
+    /* The services below run on upstream's infrastructure at streetcomplete.app. Upstream has said
+       this fork may use the photo endpoint and the map tile key. They are gathered here so that
+       pointing them somewhere else is a one-line change per service if that ever changes, or if the
+       traffic from this fork ever becomes enough to be worth not sending them. */
+
+    /** Host whose requests get [UPSTREAM_COMPAT_USER_AGENT] instead of this app's own User-Agent. */
+    const val UPSTREAM_SERVICE_HOST = "streetcomplete.app"
+
+    /** The User-Agent sent to [UPSTREAM_SERVICE_HOST], which is not this app's real one.
+     *
+     *  `/statistics/` refuses anything it does not recognise - `SC2Go ...` gets
+     *  `403 {"error":"This is not a public API"}` where `StreetComplete ...` gets the data - so
+     *  after the rename the statistics never synced and the user screen sat forever on "your
+     *  statistics are still syncing". `/photo-upload/` may well gate the same way; it is POST-only,
+     *  so that could not be established without actually uploading.
+     *
+     *  **This is a stopgap, and it is dishonest to upstream's servers**: it is the one thing the
+     *  rest of this file exists to avoid, and it takes away their ability to tell this fork's
+     *  traffic from their own on endpoints they pay to run. It is here because the alternative was
+     *  a visibly broken user screen, and only until upstream is asked whether they will accept the
+     *  real User-Agent. Delete this and [UPSTREAM_SERVICE_HOST], and the plugin in CommonModule
+     *  that uses them, the moment that is settled.
+     *
+     *  Deliberately not [APP_NAME]-derived: it must stay "StreetComplete" to work, so it must not
+     *  quietly follow a later rename. */
+    val UPSTREAM_COMPAT_USER_AGENT = "StreetComplete " + BuildConfig.VERSION_NAME
 
     /** Jawg account the vector tiles are billed to; every tile any user loads counts against it.
      *  Note this token is extractable from the shipped binary, as it is in any map app. */

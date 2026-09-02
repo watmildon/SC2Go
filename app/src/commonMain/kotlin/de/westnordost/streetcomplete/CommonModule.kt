@@ -212,8 +212,10 @@ import de.westnordost.streetcomplete.util.error_reporting.ErrorReportBuilder
 import de.westnordost.streetcomplete.util.ktx.getFeature
 import de.westnordost.streetcomplete.util.logs.DatabaseLogger
 import io.ktor.client.HttpClient
+import io.ktor.client.plugins.api.createClientPlugin
 import io.ktor.client.plugins.compression.ContentEncoding
 import io.ktor.client.plugins.defaultRequest
+import io.ktor.http.HttpHeaders
 import io.ktor.http.userAgent
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.io.files.FileSystem
@@ -236,6 +238,17 @@ val commonModule = module {
         defaultRequest {
             userAgent(ApplicationConstants.USER_AGENT)
         }
+        /* Upstream's own services reject a User-Agent they do not know, so they are told this app
+           is StreetComplete. A stopgap - see ForkConfig.UPSTREAM_COMPAT_USER_AGENT, which explains
+           what is wrong with it and when to remove it. Scoped to that one host so that nothing
+           else, OSM above all, is ever told anything but the truth. */
+        install(createClientPlugin("UpstreamUserAgentCompat") {
+            onRequest { request, _ ->
+                if (request.url.host == ForkConfig.UPSTREAM_SERVICE_HOST) {
+                    request.headers[HttpHeaders.UserAgent] = ForkConfig.UPSTREAM_COMPAT_USER_AGENT
+                }
+            }
+        })
         install(ContentEncoding) {
             gzip()
             // deflate is broken in KTOR, see https://youtrack.jetbrains.com/issue/KTOR-6999/Deflate-ContentEncoder-incorrectly-uses-raw-DEFLATE
