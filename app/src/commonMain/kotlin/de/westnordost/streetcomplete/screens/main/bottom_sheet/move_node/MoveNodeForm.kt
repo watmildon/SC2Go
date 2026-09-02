@@ -9,9 +9,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.backhandler.BackHandler
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
@@ -28,6 +26,7 @@ import de.westnordost.streetcomplete.data.osm.mapdata.LatLon
 import de.westnordost.streetcomplete.data.osm.mapdata.Node
 import de.westnordost.streetcomplete.ui.common.FloatingOkButton
 import de.westnordost.streetcomplete.ui.common.bottom_sheet.BottomSheetFormScaffold
+import de.westnordost.streetcomplete.ui.common.bottom_sheet.DismissFormHandler
 import de.westnordost.streetcomplete.ui.common.dialogs.ConfirmDiscardDialog
 import de.westnordost.streetcomplete.ui.ktx.toPx
 import de.westnordost.streetcomplete.util.countryboundaries.CountryBoundaries
@@ -42,7 +41,6 @@ import kotlin.math.sqrt
 /** Form that lets the user move an OSM node.
  *
  *  [nodeOffsetInWindow] - the offset of the [node] relative to the window. */
-@OptIn(ExperimentalComposeUiApi::class)
 @Composable
 fun MoveNodeForm(
     onConfirmed: (position: LatLon) -> Unit,
@@ -75,7 +73,9 @@ fun MoveNodeForm(
 
     var confirmDiscard by remember { mutableStateOf(false) }
 
-    BackHandler {
+    /* as on Android, a click on the map dismisses this form - the node is positioned by moving
+       the map under the crosshair, clicks are not part of that */
+    DismissFormHandler {
         if (mapPosition != node.position) {
             confirmDiscard = true
         } else {

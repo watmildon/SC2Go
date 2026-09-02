@@ -20,9 +20,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.AbsoluteAlignment
 import androidx.compose.ui.Alignment
-import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.backhandler.BackHandler
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.unit.dp
@@ -35,6 +33,7 @@ import de.westnordost.streetcomplete.resources.*
 import de.westnordost.streetcomplete.screens.main.bottom_sheet.scissorsPainter
 import de.westnordost.streetcomplete.ui.common.FloatingOkButton
 import de.westnordost.streetcomplete.ui.common.bottom_sheet.BottomSheetFormScaffold
+import de.westnordost.streetcomplete.ui.common.bottom_sheet.DismissFormHandler
 import de.westnordost.streetcomplete.ui.common.dialogs.AreYouSureDialog
 import de.westnordost.streetcomplete.ui.common.dialogs.ConfirmDiscardDialog
 import de.westnordost.streetcomplete.ui.common.quest.LocalGetOffsetCallback
@@ -53,7 +52,6 @@ import org.jetbrains.compose.resources.stringResource
 
 /** Form that lets the user split an OSM way */
 @Composable
-@OptIn(ExperimentalComposeUiApi::class)
 fun SplitWayForm(
     onConfirmed: (splits: List<SplitPolylineAtPosition>) -> Unit,
     onDismiss: () -> Unit,
@@ -98,7 +96,11 @@ fun SplitWayForm(
         )
     }
 
-    BackHandler {
+    /* the whole map is this form's work area - the crosshair is aimed by moving the map about, and
+       on Android SplitWayFragment.onClickMapAt swallowed clicks on it (it cut the way there). So a
+       click next to the form does not dismiss it here either; that is what the cancel button and
+       the back gesture are for. */
+    DismissFormHandler(consumesMapClicks = true) {
         if (hasChanges) {
             confirmDiscard = true
         } else {

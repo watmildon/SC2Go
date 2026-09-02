@@ -76,7 +76,10 @@ fun AddAddressStreetForm(
                 streetOrPlaceName = PlaceName("")
                 showSelect = true
             }
-        ) }
+        ) },
+        /* while the street name is being asked for, a click on the map picks the name of the road
+           clicked instead of dismissing the form - just as on Android */
+        consumesMapClicks = streetOrPlaceName is StreetName,
     ) {
         StreetOrPlaceNameForm(
             value = streetOrPlaceName,

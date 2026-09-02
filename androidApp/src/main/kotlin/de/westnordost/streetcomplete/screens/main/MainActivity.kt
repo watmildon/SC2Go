@@ -452,6 +452,9 @@ class MainActivity :
     }
 
     override fun onClickedMapAt(position: LatLon, clickAreaSizeInMeters: Double) {
+        /* while a form is open the click goes to the form, which either uses it for something of
+           its own - picking up the name of the road clicked, say - or takes it as the request to
+           close that it usually is (see DismissFormHandler) */
         if (mainBottomSheetViewModel.shownBottomSheet.value != null) {
             lastMapClick.value = MapClick(position, clickAreaSizeInMeters)
         } else if (editHistoryViewModel.isShowingSidebar.value) {

@@ -23,7 +23,6 @@ import de.westnordost.streetcomplete.screens.main.bottom_sheet.note.CreateNoteFo
 import de.westnordost.streetcomplete.screens.main.bottom_sheet.overlay.OverlayFormContainer
 import de.westnordost.streetcomplete.screens.main.bottom_sheet.quest.OsmQuestFormContainer
 import de.westnordost.streetcomplete.ui.common.dialogs.SurveyConfirmationDialog
-import de.westnordost.streetcomplete.ui.common.quest.MapClick
 import de.westnordost.streetcomplete.ui.common.quest.Marker
 import org.jetbrains.compose.resources.DrawableResource
 
@@ -47,7 +46,6 @@ fun MainBottomSheet(
     mapMetersPerDp: Double,
     onSetMapMarkers: (Iterable<Marker>) -> Unit,
     getOffset: (position: LatLon) -> Offset?,
-    lastMapClick: MapClick?,
     modifier: Modifier = Modifier
 ) {
     var confirmEdit by remember { mutableStateOf<PendingEdit?>(null) }
@@ -134,7 +132,6 @@ fun MainBottomSheet(
                 mapMetersPerDp = mapMetersPerDp,
                 onSetMapMarkers = onSetMapMarkers,
                 getOffset = getOffset,
-                lastMapClick = lastMapClick,
                 modifier = modifier,
             )
         }
@@ -176,7 +173,6 @@ fun MainBottomSheet(
                 mapMetersPerDp = mapMetersPerDp,
                 onSetMapMarkers = onSetMapMarkers,
                 getOffset = getOffset,
-                lastMapClick = lastMapClick,
                 modifier = modifier,
             )
         }

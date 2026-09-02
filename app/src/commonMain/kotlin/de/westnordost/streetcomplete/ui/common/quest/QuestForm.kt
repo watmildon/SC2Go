@@ -15,9 +15,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.backhandler.BackHandler
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.unit.dp
 import de.westnordost.osmfeatures.FeatureDictionary
@@ -29,6 +27,7 @@ import de.westnordost.streetcomplete.osm.places.isPlaceOrDisusedPlace
 import de.westnordost.streetcomplete.resources.*
 import de.westnordost.streetcomplete.ui.common.FloatingOkButton
 import de.westnordost.streetcomplete.ui.common.bottom_sheet.BottomSheetFormScaffold
+import de.westnordost.streetcomplete.ui.common.bottom_sheet.DismissFormHandler
 import de.westnordost.streetcomplete.ui.common.dialogs.ConfirmDiscardDialog
 import de.westnordost.streetcomplete.ui.theme.defaultTextLinkStyles
 import de.westnordost.streetcomplete.ui.theme.titleSmall
@@ -49,7 +48,10 @@ import org.koin.compose.koinInject
  *  **This composable requires the `LocalQuestType` composition local to be set!**
  *
  *  At the very start of the text button row, there's a text button labeled "Uh…" that, when tapped,
- *  opens a dropdown menu containing [otherAnswers] (defined from start to bottom). */
+ *  opens a dropdown menu containing [otherAnswers] (defined from start to bottom).
+ *
+ *  A click on the map next to the form dismisses it, unless the form uses map clicks for something
+ *  itself - then it should set [consumesMapClicks]. */
 @Composable
 fun QuestForm(
     on: (Action) -> Unit,
@@ -68,6 +70,7 @@ fun QuestForm(
     note: String? = LocalElement.current?.tags?.get("note"),
     otherAnswers: @Composable () -> List<AnswerItem> = { emptyList() },
     contentPadding: PaddingValues = PaddingValues(horizontal = 24.dp, vertical = 12.dp),
+    consumesMapClicks: Boolean = false,
     content: @Composable BoxScope.() -> Unit,
 ) {
     QuestForm(
@@ -86,6 +89,7 @@ fun QuestForm(
         modifier = modifier,
         content = content,
         isResurvey = isResurvey,
+        consumesMapClicks = consumesMapClicks,
     )
 }
 
@@ -99,7 +103,10 @@ fun QuestForm(
  *  **This composable requires the `LocalQuestType` composition local to be set!**
  *
  *  At the very start of the text button row, there's a text button labeled "Uh…" that, when tapped,
- *  opens a dropdown menu containing [otherAnswers] (defined from start to bottom). */
+ *  opens a dropdown menu containing [otherAnswers] (defined from start to bottom).
+ *
+ *  A click on the map next to the form dismisses it, unless the form uses map clicks for something
+ *  itself - then it should set [consumesMapClicks]. */
 @Composable
 fun QuestForm(
     on: (Action) -> Unit,
@@ -116,6 +123,7 @@ fun QuestForm(
     note: String? = LocalElement.current?.tags?.get("note"),
     otherAnswers: @Composable () -> List<AnswerItem> = { emptyList() },
     contentPadding: PaddingValues = PaddingValues(horizontal = 24.dp, vertical = 12.dp),
+    consumesMapClicks: Boolean = false,
     content: @Composable (BoxScope.() -> Unit)? = null,
 ) {
     QuestForm(
@@ -134,10 +142,10 @@ fun QuestForm(
         modifier = modifier,
         content = content,
         isResurvey = isResurvey,
+        consumesMapClicks = consumesMapClicks,
     )
 }
 
-@OptIn(ExperimentalComposeUiApi::class)
 @Composable
 private fun QuestForm(
     on: (Action) -> Unit,
@@ -153,6 +161,7 @@ private fun QuestForm(
     answers: List<AnswerItem>,
     otherAnswers: @Composable () -> List<AnswerItem>,
     contentPadding: PaddingValues,
+    consumesMapClicks: Boolean,
     modifier: Modifier = Modifier,
     mapDataWithEditsSource: MapDataWithEditsSource = koinInject(),
     content: @Composable (BoxScope.() -> Unit)?,
@@ -161,7 +170,7 @@ private fun QuestForm(
 
     var confirmDiscard by remember { mutableStateOf(false) }
 
-    BackHandler {
+    DismissFormHandler(consumesMapClicks) {
         if (hasChanges) {
             confirmDiscard = true
         } else {
