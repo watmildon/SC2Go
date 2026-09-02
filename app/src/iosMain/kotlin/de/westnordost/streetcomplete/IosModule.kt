@@ -23,10 +23,6 @@ import de.westnordost.streetcomplete.data.upload.UploadController
 import de.westnordost.streetcomplete.data.upload.Uploader
 import de.westnordost.streetcomplete.screens.about.AppStoreInfo
 import de.westnordost.streetcomplete.screens.about.IosAppStoreInfo
-import de.westnordost.streetcomplete.screens.main.EmailAppLauncher
-import de.westnordost.streetcomplete.screens.main.IosEmailAppLauncher
-import de.westnordost.streetcomplete.screens.main.IosMapAppLauncher
-import de.westnordost.streetcomplete.screens.main.MapAppLauncher
 import de.westnordost.streetcomplete.ui.util.measure.ArSupportChecker
 import de.westnordost.streetcomplete.ui.util.measure.IosArSupportChecker
 import de.westnordost.streetcomplete.util.error_reporting.CrashReportHolder

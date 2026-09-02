@@ -113,7 +113,9 @@ fun IosMainScreen() {
        MainActivity hooks it into its lifecycle on Android */
     val autoSyncer: AutoSyncer = koinInject()
     val locationProvider: LocationProvider = koinInject()
-    val mapAppLauncher: MapAppLauncher = koinInject()
+    /* not koinInject: upstream replaced the Koin binding with this composable, and the binding is
+       gone as of the maplibre-compose merge */
+    val mapAppLauncher = rememberMapAppLauncher()
     val isOpenLocationAvailable = remember { mapAppLauncher.isAvailable() }
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner, autoSyncer) {
