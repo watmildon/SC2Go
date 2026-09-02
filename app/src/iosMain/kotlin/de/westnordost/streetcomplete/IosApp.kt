@@ -12,6 +12,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.Saver
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -29,6 +31,11 @@ import platform.Foundation.NSUserDefaults
 private enum class Screen {
     Changelog, Credits, PrivacyStatement, LanguageSelection, ShowMap, MapPerf, Main
 }
+
+private val ScreenSaver = Saver<Screen?, String>(
+    save = { it?.name },
+    restore = { name -> Screen.entries.find { it.name == name } },
+)
 
 /** Allows opening a screen directly for development, e.g.
  *  xcrun simctl launch booted <bundle id> -screen Changelog */
@@ -60,7 +67,10 @@ fun IosApp() {
         }
     }
 
-    var screen by remember { mutableStateOf(initialScreen) }
+    /* saveable, not just remembered, so that changing the language - which rebuilds the whole
+       composition, see WithSelectedLanguage - leaves the current screen open rather than dropping
+       back to the launcher */
+    var screen by rememberSaveable(stateSaver = ScreenSaver) { mutableStateOf(initialScreen) }
 
     Surface(Modifier.fillMaxSize()) {
         when (screen) {

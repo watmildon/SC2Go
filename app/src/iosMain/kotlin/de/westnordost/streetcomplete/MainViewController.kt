@@ -1,13 +1,18 @@
 package de.westnordost.streetcomplete
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.ReusableContentHost
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.LocalSaveableStateRegistry
+import androidx.compose.runtime.saveable.SaveableStateRegistry
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.window.ComposeUIViewController
 import de.westnordost.streetcomplete.data.preferences.Preferences
 import de.westnordost.streetcomplete.data.preferences.Theme
@@ -15,7 +20,11 @@ import de.westnordost.streetcomplete.ui.theme.AppTheme
 import kotlinx.coroutines.delay
 import org.koin.compose.koinInject
 import org.koin.mp.KoinPlatform
+import platform.Foundation.NSLocale
+import platform.Foundation.characterDirectionForLanguage
+import platform.Foundation.NSLocaleLanguageDirectionRightToLeft
 import platform.Foundation.NSUserDefaults
+import platform.Foundation.preferredLanguages
 import platform.UIKit.UIApplication
 import platform.UIKit.UIUserInterfaceStyle
 import platform.UIKit.UIViewController
@@ -51,19 +60,60 @@ fun MainViewController(): UIViewController {
  *  language it was composed with. Throwing that composition away and building it again is the
  *  counterpart of `ActivityCompat.recreate` in `BaseActivity.onRestart` on Android.
  *
- *  Like the activity recreate, this loses transient UI state - a half-typed answer, a scroll
- *  position. That is the accepted cost on Android too, for something that happens only when
- *  someone deliberately changes the language. */
+ *  Three things the bare recreate got wrong, all of which Android gets right for free:
+ *
+ *  `rememberSaveable` state is carried across by hand. The obvious `SaveableStateHolder` does not
+ *  work here: it saves a subtree's state when that subtree is *disposed*, which Compose does after
+ *  composing the replacement, so the new tree reads an empty store and everything resets. Saving
+ *  from the listener instead happens before the key changes, so the values are there to restore
+ *  into. This is what `savedInstanceState` does across an activity recreate; anything in a plain
+ *  `remember` is still lost, exactly as it is there.
+ *
+ *  The layout direction is provided rather than inherited. UIKit resolves the process's direction
+ *  once at launch, so a right-to-left language picked while running left the layout unmirrored -
+ *  Arabic text in a left-to-right layout. On Android the recreated activity picks it up from the
+ *  configuration. What UIKit itself draws - the keyboard, system alerts - stays as resolved at
+ *  launch and only follows on the next one. */
 @Composable
 private fun WithSelectedLanguage(content: @Composable () -> Unit) {
     val prefs: Preferences = koinInject()
     var language by remember { mutableStateOf(prefs.language) }
+    var registry by remember {
+        mutableStateOf(SaveableStateRegistry(restoredValues = null, canBeSaved = { true }))
+    }
+    /* Deactivating and reactivating rather than key(language): key() mixes the language into
+       currentCompositeKeyHash, which is what rememberSaveable derives its keys from, so restored
+       values would be filed under keys the new composition never asks for. Deactivating leaves the
+       call sites where they are, so the keys still match. */
+    var isActive by remember { mutableStateOf(true) }
     DisposableEffect(prefs) {
         // held onto until disposed, as the preferences only keep a weak reference to it
-        val listener = prefs.onLanguageChanged { language = it }
+        val listener = prefs.onLanguageChanged { newLanguage ->
+            /* order matters: this runs before the recomposition the change triggers, so the old
+               composition is still there to be saved out of */
+            registry = SaveableStateRegistry(registry.performSave(), canBeSaved = { true })
+            language = newLanguage
+            isActive = false
+        }
         onDispose { listener.deactivate() }
     }
-    key(language) { content() }
+    LaunchedEffect(isActive) { if (!isActive) isActive = true }
+    CompositionLocalProvider(
+        LocalSaveableStateRegistry provides registry,
+        LocalLayoutDirection provides layoutDirectionOf(language),
+    ) {
+        ReusableContentHost(isActive) { content() }
+    }
+}
+
+/** [language] is a tag like `pt-BR`, while `characterDirectionForLanguage` wants a bare language
+ *  code. `null` means the system default, which is what `preferredLanguages` reports once the
+ *  override has been removed. */
+private fun layoutDirectionOf(language: String?): LayoutDirection {
+    val tag = language ?: NSLocale.preferredLanguages.firstOrNull() as? String
+    val code = tag?.substringBefore('-')?.substringBefore('_') ?: return LayoutDirection.Ltr
+    val isRtl = NSLocale.characterDirectionForLanguage(code) == NSLocaleLanguageDirectionRightToLeft
+    return if (isRtl) LayoutDirection.Rtl else LayoutDirection.Ltr
 }
 
 /** Changes the language while the app is running, so the live switch can be exercised without
