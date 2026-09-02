@@ -27,7 +27,7 @@ object ForkConfig {
      *
      *  Renaming this is the branding change. Read `ApplicationConstants.QUESTTYPE_TAG_KEY` first:
      *  it used to be derived from this name and deliberately no longer is. */
-    const val APP_NAME = "StreetComplete"
+    const val APP_NAME = "SC2Go"
 
     /** This fork's own OAuth 2 client, registered on openstreetmap.org. It is what the user is
      *  shown when asked to grant write access to their OSM account, so it is the difference between
@@ -76,9 +76,20 @@ object ForkConfig {
     /** Read-only: a GET carrying the user's own OSM id, to show their edit statistics. */
     const val STATISTICS_URL = "https://streetcomplete.app/statistics/"
 
-    /** A kill switch. The app asks whether its own `USER_AGENT` is on this list and refuses to
-     *  upload if it is, which means upstream can disable builds of this fork. */
-    const val BANNED_VERSIONS_URL = "https://streetcomplete.app/banned_versions.txt"
+    /** A kill switch: the app refuses to upload if its own [ApplicationConstants.USER_AGENT] appears
+     *  as the first tab-separated field of a line here, with an optional reason in the second.
+     *
+     *  Pointed at this fork's own repository rather than upstream's list, so that this project can
+     *  stop a bad build of its own - and so that upstream cannot, which cuts both ways and is worth
+     *  being deliberate about.
+     *
+     *  Three things to know before relying on it. It only works once `banned_versions.txt` is on
+     *  the default branch of the fork *and pushed*. raw.githubusercontent.com is CDN-cached, so a
+     *  ban takes a few minutes to reach clients. And `VersionIsBannedChecker` swallows every
+     *  exception and reports "not banned", so a typo in this URL, a renamed branch or an offline
+     *  device all fail open, silently - it is a courtesy brake, not a guarantee. */
+    const val BANNED_VERSIONS_URL =
+        "https://raw.githubusercontent.com/watmildon/StreetComplete/master/banned_versions.txt"
 
     /** The `https` half of quest preset sharing links - the half that works when the recipient does
      *  not have the app installed, and so the one that appears in anything shared publicly. */

@@ -1,0 +1,12 @@
+Versions of SC2Go that are blocked from uploading to OpenStreetMap.
+The app reads this file at https://raw.githubusercontent.com/watmildon/StreetComplete/master/banned_versions.txt
+and refuses to upload when its own User-Agent matches the first tab-separated field of a line.
+Anything that is not an exact User-Agent, these lines included, is simply never matched.
+
+Format, one per line, tab separated:
+    <User-Agent>	<reason shown to the user, optional>
+The User-Agent is ApplicationConstants.USER_AGENT, i.e. "<ForkConfig.APP_NAME> <appVersionName>",
+for example:
+    SC2Go 64.0-alpha1-prometheus	Uploads corrupt data, please update.
+
+Note this fails open: if this file is unreachable or the branch is renamed, nothing is banned.

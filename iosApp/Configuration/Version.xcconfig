@@ -1,4 +1,4 @@
-// The app's version, and the build configuration Xcode actually reads.
+// The app's committed identity - name and version - and the build configuration Xcode reads.
 //
 // This exists as its own file because Config.xcconfig is a *local* file: it carries TEAM_ID and
 // the bundle identifier, and is marked skip-worktree so nobody's signing identity gets committed
@@ -7,6 +7,12 @@
 // file pulls the local one in. Later assignments win in an xcconfig, so the values below override
 // whatever stale copies a local Config.xcconfig still has.
 #include "Config.xcconfig"
+
+// The name on the home screen and in the App Store (it becomes CFBundleName), overriding the
+// StreetComplete that upstream's Config.xcconfig still carries. It also names the built product,
+// so the bundle is SC2Go.app. PRODUCT_MODULE_NAME stays iosApp: it only has to differ from the
+// Kotlin framework's name, which is still StreetComplete internally.
+PRODUCT_NAME=SC2Go
 
 // Must match app/build.gradle.kts, which is the source of truth: MARKETING_VERSION is
 // appVersionName up to the first "-" (CFBundleShortVersionString takes dotted integers only, so
