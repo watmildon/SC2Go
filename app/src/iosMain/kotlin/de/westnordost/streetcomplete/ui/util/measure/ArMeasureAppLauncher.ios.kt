@@ -29,7 +29,7 @@ actual fun rememberArMeasureAppLauncher(): ArMeasureAppLauncher =
                 LengthUnit.FOOT_AND_INCH -> "foot_and_inch"
             }
             val parameters = mapOf(
-                "x-source" to             "StreetComplete",
+                "x-source" to             ForkConfig.APP_NAME,
                 "x-success" to            callbackScheme,
                 "x-cancel" to             callbackScheme,
                 "unit" to                 unit,

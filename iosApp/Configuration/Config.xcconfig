@@ -9,4 +9,4 @@ TEAM_ID=
 PRODUCT_NAME=StreetComplete
 // must differ from the Kotlin framework's name, which is also StreetComplete
 PRODUCT_MODULE_NAME=iosApp
-PRODUCT_BUNDLE_IDENTIFIER=de.westnordost.streetcomplete
+PRODUCT_BUNDLE_IDENTIFIER=com.watmildon.sc2go

@@ -119,7 +119,7 @@ private fun LauncherScreen(onClickScreen: (Screen) -> Unit) {
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Text(
-            text = "StreetComplete",
+            text = ForkConfig.APP_NAME,
             style = MaterialTheme.typography.h4,
         )
         for (entry in Screen.entries) {
