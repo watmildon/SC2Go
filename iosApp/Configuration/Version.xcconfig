@@ -1,0 +1,19 @@
+// The app's version, and the build configuration Xcode actually reads.
+//
+// This exists as its own file because Config.xcconfig is a *local* file: it carries TEAM_ID and
+// the bundle identifier, and is marked skip-worktree so nobody's signing identity gets committed
+// (`git ls-files -v` shows it as `S`). Version numbers put there would never reach anyone else -
+// they would keep building 0.1 (1) - so they live here, in a file that is committed, and this
+// file pulls the local one in. Later assignments win in an xcconfig, so the values below override
+// whatever stale copies a local Config.xcconfig still has.
+#include "Config.xcconfig"
+
+// Must match app/build.gradle.kts, which is the source of truth: MARKETING_VERSION is
+// appVersionName up to the first "-" (CFBundleShortVersionString takes dotted integers only, so
+// the "-alpha1-prometheus" part cannot go here), and CURRENT_PROJECT_VERSION is appVersionCode.
+// :app:checkIosAppVersion fails the build if they drift apart.
+//
+// CURRENT_PROJECT_VERSION is what TestFlight uses to tell uploads apart, and it has to increase
+// for every upload - bump appVersionCode in build.gradle.kts and mirror it here.
+CURRENT_PROJECT_VERSION=6400
+MARKETING_VERSION=64.0

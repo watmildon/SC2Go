@@ -1,9 +1,12 @@
+// Local, per-developer settings. This file is marked skip-worktree (`git ls-files -v` shows `S`)
+// so that nobody's signing identity is committed: set TEAM_ID to your own Apple Developer team and
+// PRODUCT_BUNDLE_IDENTIFIER to an identifier registered in it, and your changes stay local.
+//
+// The app's version is NOT here - it is in Version.xcconfig, which is committed and which includes
+// this file. Setting a version here would have no effect; it would be overridden.
 TEAM_ID=
 
 PRODUCT_NAME=StreetComplete
 // must differ from the Kotlin framework's name, which is also StreetComplete
 PRODUCT_MODULE_NAME=iosApp
 PRODUCT_BUNDLE_IDENTIFIER=de.westnordost.streetcomplete
-
-CURRENT_PROJECT_VERSION=1
-MARKETING_VERSION=0.1

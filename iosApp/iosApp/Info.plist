@@ -5,6 +5,12 @@
 	<key>CADisableMinimumFrameDurationOnPhone</key>
     <true/>
 
+	<!-- The app uses only standard HTTPS/TLS (and SHA-256 for the OAuth PKCE challenge, which is
+	     hashing, not encryption), so it is exempt. Without this key App Store Connect asks the
+	     export-compliance question on every single upload. -->
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
+
 	<key>CFBundleURLTypes</key>
     <array>
         <dict>

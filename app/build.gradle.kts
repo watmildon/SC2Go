@@ -391,6 +391,50 @@ tasks.register<UpdateAppTranslationCompletenessTask>("updateTranslationCompleten
     targetFiles = { projectDir.resolve("src/commonMain/composeResources/values-$it/translation_info.xml") }
 }
 
+/** The iOS app carries its version in an xcconfig, which Xcode reads before the build starts, so
+ *  it cannot be generated during one. Keeping it a checked-in mirror of the values here and
+ *  failing loudly when the two drift is the next best thing - and drift is not hypothetical: this
+ *  shipped an archive as 0.1 (1) while the app itself reported 64.0-alpha1-prometheus. */
+val checkIosAppVersion by tasks.registering {
+    group = "verification"
+    description = "Fails if iosApp's xcconfig version does not match appVersionName/appVersionCode"
+    val xcconfig = rootProject.file("iosApp/Configuration/Version.xcconfig")
+    val expectedMarketing = appVersionName.substringBefore('-')
+    val expectedProject = appVersionCode.toString()
+    inputs.file(xcconfig)
+    inputs.property("marketing", expectedMarketing)
+    inputs.property("project", expectedProject)
+    outputs.upToDateWhen { true }
+    doLast {
+        val text = xcconfig.readText()
+        fun valueOf(key: String): String? =
+            Regex("^$key\\s*=\\s*(.+)$", RegexOption.MULTILINE).find(text)?.groupValues?.get(1)?.trim()
+        val marketing = valueOf("MARKETING_VERSION")
+        val project = valueOf("CURRENT_PROJECT_VERSION")
+        val problems = buildList {
+            if (marketing != expectedMarketing) {
+                add("MARKETING_VERSION is $marketing, expected $expectedMarketing")
+            }
+            if (project != expectedProject) {
+                add("CURRENT_PROJECT_VERSION is $project, expected $expectedProject")
+            }
+        }
+        if (problems.isNotEmpty()) {
+            throw GradleException(
+                "${xcconfig.path} is out of sync with app/build.gradle.kts:\n" +
+                problems.joinToString("\n") { "  - $it" } +
+                "\n(appVersionName = $appVersionName, appVersionCode = $appVersionCode)"
+            )
+        }
+    }
+}
+
+/* so that an Xcode build checks it too: this is the task the "Compile Kotlin Framework" build
+   phase runs */
+tasks.matching { it.name.startsWith("embedAndSignAppleFrameworkForXcode") }.configureEach {
+    dependsOn(checkIosAppVersion)
+}
+
 tasks.register<UpdateIosAppTranslationsTask>("updateIosTranslations") {
     group = "streetcomplete"
     projectId = poEditorProjectId

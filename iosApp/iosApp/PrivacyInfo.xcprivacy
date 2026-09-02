@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+    Privacy manifest. Apple requires one for the "required reason" APIs the binary references.
+
+    The categories below were not guessed: they are the ones the archived release binary actually
+    references, checked with nm over app/build .../StreetComplete.app/StreetComplete.
+      NSUserDefaults  - OBJC_CLASS_$_NSUserDefaults, from multiplatform-settings and the
+                        AppleLanguages write that applies the language setting
+      stat/fstat/lstat - file timestamps, from SQLite and kotlinx-io
+      statfs/fstatfs   - free space, from SQLite
+    NSPrivacyAccessedAPICategorySystemBootTime is deliberately NOT declared: sysctlbyname is
+    referenced, but the "kern.boottime" selector string does not appear in the binary, so boot time
+    is not being read. Re-check with nm if the dependency set changes.
+
+    NSPrivacyCollectedDataTypes is empty: nothing is sent to a server this project controls. Edits
+    go to OpenStreetMap under the user's own account, and the statistics endpoint is only ever read
+    from (a GET carrying the user's own OSM id). The App Store Connect privacy questionnaire is the
+    authoritative answer, though, and is the account holder's to complete - treat this as the
+    starting point for it, not as the final word.
+-->
+<plist version="1.0">
+<dict>
+    <key>NSPrivacyTracking</key>
+    <false/>
+    <key>NSPrivacyTrackingDomains</key>
+    <array/>
+    <key>NSPrivacyCollectedDataTypes</key>
+    <array/>
+    <key>NSPrivacyAccessedAPITypes</key>
+    <array>
+        <dict>
+            <key>NSPrivacyAccessedAPIType</key>
+            <string>NSPrivacyAccessedAPICategoryUserDefaults</string>
+            <key>NSPrivacyAccessedAPITypeReasons</key>
+            <array>
+                <!-- CA92.1: access info from the app itself -->
+                <string>CA92.1</string>
+            </array>
+        </dict>
+        <dict>
+            <key>NSPrivacyAccessedAPIType</key>
+            <string>NSPrivacyAccessedAPICategoryFileTimestamp</string>
+            <key>NSPrivacyAccessedAPITypeReasons</key>
+            <array>
+                <!-- C617.1: timestamps of files inside the app container -->
+                <string>C617.1</string>
+            </array>
+        </dict>
+        <dict>
+            <key>NSPrivacyAccessedAPIType</key>
+            <string>NSPrivacyAccessedAPICategoryDiskSpace</string>
+            <key>NSPrivacyAccessedAPITypeReasons</key>
+            <array>
+                <!-- E174.1: check there is space to write, before writing -->
+                <string>E174.1</string>
+            </array>
+        </dict>
+    </array>
+</dict>
+</plist>
