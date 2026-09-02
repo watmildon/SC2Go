@@ -1,5 +1,6 @@
 package de.westnordost.streetcomplete.screens.main.map
 
+import de.westnordost.streetcomplete.ForkConfig
 import org.maplibre.compose.util.DpPadding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
@@ -58,7 +59,7 @@ fun MapStyle(
     belowLabelsContent: @Composable @MaplibreComposable () -> Unit = {},
     aboveLabelsContent: @Composable @MaplibreComposable () -> Unit = {},
 ) {
-    val accessToken = "mL9X4SwxfsAGfojvGiion9hPKuGLKxPbogLyMbtakA2gJ3X88gcVlTSQ7OD6OfbZ"
+    val accessToken = ForkConfig.JAWG_ACCESS_TOKEN
     val osmAttribution = stringResource(Res.string.map_attribution_osm)
     val attributionHtml = remember(osmAttribution) {
         "<a href='https://www.openstreetmap.org/copyright'>$osmAttribution</a> " +

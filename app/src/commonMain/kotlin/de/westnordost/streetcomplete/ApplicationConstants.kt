@@ -7,9 +7,14 @@ import kotlin.time.Duration.Companion.days
 import kotlin.time.Duration.Companion.minutes
 
 object ApplicationConstants {
-    const val NAME = "StreetComplete"
+    const val NAME = ForkConfig.APP_NAME
     val USER_AGENT = NAME + " " + BuildConfig.VERSION_NAME
-    const val QUESTTYPE_TAG_KEY = NAME + ":quest_type"
+
+    /* Deliberately the literal name and not NAME + ":quest_type". This key is written into the
+       changeset tags of every upload, so it is data in OSM rather than a label: keeping it as
+       StreetComplete's means StreetComplete's own resurvey logic still recognises the metadata on
+       edits made from this fork, and vice versa. Renaming the app must not quietly change it. */
+    const val QUESTTYPE_TAG_KEY = "StreetComplete:quest_type"
 
     const val OLD_DATABASE_NAME = "streetcomplete.db"
     const val DATABASE_NAME = "streetcomplete_v2.db"
@@ -78,7 +83,7 @@ object ApplicationConstants {
 
     const val AVATARS_CACHE_DIRECTORY = "osm_user_avatars"
 
-    const val SC_PHOTO_SERVICE_URL = "https://streetcomplete.app/photo-upload/" // must have trailing /
+    const val SC_PHOTO_SERVICE_URL = ForkConfig.PHOTO_SERVICE_URL
 
     const val ATTACH_PHOTO_QUALITY = 65 // doesn't need to look super pretty
     const val ATTACH_PHOTO_MAX_SIZE = 1920 // Full HD

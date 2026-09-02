@@ -226,7 +226,7 @@ private const val OSM_API_URL_LIVE = "https://api.openstreetmap.org/api/0.6/"
 private const val OSM_API_URL_TEST = "https://master.apis.dev.openstreetmap.org/api/0.6/"
 val OSM_API_URL = if (USE_TEST_API) OSM_API_URL_TEST else OSM_API_URL_LIVE
 
-private const val STATISTICS_BACKEND_URL = "https://streetcomplete.app/statistics/"
+private const val STATISTICS_BACKEND_URL = ForkConfig.STATISTICS_URL
 
 val commonModule = module {
 
@@ -262,7 +262,7 @@ val commonModule = module {
 
     single { UnsyncedChangesCountSource(get(), get()) }
 
-    factory { VersionIsBannedChecker(get(), "https://streetcomplete.app/banned_versions.txt", ApplicationConstants.USER_AGENT) }
+    factory { VersionIsBannedChecker(get(), ForkConfig.BANNED_VERSIONS_URL, ApplicationConstants.USER_AGENT) }
 
     single { Uploader(get(), get(), get(), get(), get(), get(), get(named("SerializeSync"))) }
 

@@ -1,5 +1,6 @@
 package de.westnordost.streetcomplete.data.urlconfig
 
+import de.westnordost.streetcomplete.ForkConfig
 import de.westnordost.streetcomplete.data.ObjectTypeRegistry
 import de.westnordost.streetcomplete.data.overlays.Overlay
 import de.westnordost.streetcomplete.data.overlays.OverlayRegistry
@@ -16,8 +17,8 @@ data class UrlConfig(
     val selectedOverlay: Overlay?,
 )
 
-private const val URL = "https://streetcomplete.app/s"
-private const val URL2 = "streetcomplete://s"
+private const val URL = ForkConfig.URL_CONFIG_WEB_URL
+private const val URL2 = ForkConfig.URL_SCHEME + "://s"
 
 private const val PARAM_NAME = "n"
 private const val PARAM_QUESTS = "q"

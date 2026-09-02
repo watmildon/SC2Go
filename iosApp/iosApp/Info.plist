@@ -11,6 +11,10 @@
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
 
+	<!-- The scheme below must match ForkConfig.URL_SCHEME in the shared Kotlin code, which is what
+	     builds the OAuth callback (<scheme>://oauth) and quest preset links (<scheme>://s), and it
+	     must also match the redirect URI registered against the OAuth client on openstreetmap.org.
+	     Nothing checks this automatically. -->
 	<key>CFBundleURLTypes</key>
     <array>
         <dict>
