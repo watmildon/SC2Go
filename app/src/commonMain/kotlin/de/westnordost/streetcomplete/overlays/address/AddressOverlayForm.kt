@@ -267,7 +267,10 @@ fun AddressOverlayForm(
                     Pin(iconPainter = painterResource(Res.drawable.quest_housenumber))
                 }
             },
-            otherAnswers = ::createOtherAnswers
+            otherAnswers = ::createOtherAnswers,
+            /* while the street name is being asked for, a click on the map picks the name of the
+               road clicked instead of dismissing the form - just as on Android */
+            consumesMapClicks = address.streetOrPlace is StreetName,
         ) {
             AddressForm(
                 value = address,

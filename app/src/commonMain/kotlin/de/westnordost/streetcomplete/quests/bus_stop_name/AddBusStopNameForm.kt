@@ -48,6 +48,8 @@ fun AddBusStopNameForm(
         hint = {
             Text(stringResource(Res.string.quest_streetName_abbreviation_instruction))
         },
+        // a click on the map is how one copies the name of a nearby stop, not a dismissal
+        consumesMapClicks = true,
     )
 }
 

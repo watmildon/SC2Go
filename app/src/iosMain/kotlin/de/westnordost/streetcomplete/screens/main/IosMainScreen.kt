@@ -512,9 +512,11 @@ fun IosMainScreen() {
             },
             onClickQuest = { questKey -> mainBottomSheetViewModel.showQuest(questKey) },
             onClickEdit = { editKey -> editHistoryViewModel.select(editKey) },
-            /* exactly what MainActivity.onClickedMapAt does: while a form is open the click is
-               something the form may want to know about, and otherwise it dismisses the edit
-               history, which is the only way to get rid of it apart from the back gesture */
+            /* exactly what MainActivity.onClickedMapAt does: while a form is open the click goes
+               to the form, which either uses it for something of its own - picking up the name of
+               the road clicked, say - or takes it as the request to close that it usually is;
+               otherwise it dismisses the edit history, which is the only way to get rid of that
+               apart from the back gesture */
             onClickMap = { position, clickAreaSizeInMeters ->
                 if (shownBottomSheet != null) {
                     lastMapClick = MapClick(position, clickAreaSizeInMeters)

@@ -12,6 +12,7 @@ import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.Box
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
@@ -41,6 +42,7 @@ import de.westnordost.streetcomplete.screens.tutorial.IntroTutorialScreen
 import de.westnordost.streetcomplete.screens.tutorial.OverlaysTutorialScreen
 import de.westnordost.streetcomplete.ui.common.AnimatedScreenVisibility
 import de.westnordost.streetcomplete.ui.common.ToastPopup
+import de.westnordost.streetcomplete.ui.common.quest.LocalLastMapClick
 import de.westnordost.streetcomplete.ui.common.quest.MapClick
 import de.westnordost.streetcomplete.ui.common.quest.Marker
 import de.westnordost.streetcomplete.ui.ktx.dir
@@ -122,6 +124,13 @@ fun MainScreen(
 
     val shownBottomSheet by mainBottomSheetViewModel.shownBottomSheet.collectAsState()
     val geometryOffsetInWindow by mainBottomSheetViewModel.geometryOffsetInWindow.collectAsState()
+
+    /* A click on the map belongs to the form that was open when it happened: it is what dismisses
+       that form, or, for the forms that ask for a name, what makes them pick up the name of the
+       thing clicked. So, any click from before the current form was shown is forgotten - it must
+       not dismiss or answer a form that wasn't even open yet. */
+    val mapClickBeforeShown = remember(shownBottomSheet) { lastMapClick }
+    val mapClick = lastMapClick.takeIf { it !== mapClickBeforeShown }
 
     val emailAppLauncher = rememberEmailAppLauncher()
 
@@ -285,20 +294,22 @@ fun MainScreen(
                 },
             ) { shownBottomSheet ->
                 if (shownBottomSheet != null) {
-                    MainBottomSheet(
-                        onDismiss = { mainBottomSheetViewModel.closeBottomSheet() },
-                        onSolved = onSolvedQuest,
-                        viewModel = mainBottomSheetViewModel,
-                        shownBottomSheet = shownBottomSheet,
-                        geometryOffsetInWindow = geometryOffsetInWindow,
-                        mapRotation = mapCamera.rotation.toFloat(),
-                        mapTilt = mapCamera.tilt.toFloat(),
-                        mapPosition = mapCamera.position,
-                        mapMetersPerDp = metersPerDp,
-                        onSetMapMarkers = onSetMapMarkers,
-                        getOffset = getOffset,
-                        lastMapClick = lastMapClick,
-                    )
+                    // everything shown in the bottom sheet may react to clicks on the map
+                    CompositionLocalProvider(LocalLastMapClick provides mapClick) {
+                        MainBottomSheet(
+                            onDismiss = { mainBottomSheetViewModel.closeBottomSheet() },
+                            onSolved = onSolvedQuest,
+                            viewModel = mainBottomSheetViewModel,
+                            shownBottomSheet = shownBottomSheet,
+                            geometryOffsetInWindow = geometryOffsetInWindow,
+                            mapRotation = mapCamera.rotation.toFloat(),
+                            mapTilt = mapCamera.tilt.toFloat(),
+                            mapPosition = mapCamera.position,
+                            mapMetersPerDp = metersPerDp,
+                            onSetMapMarkers = onSetMapMarkers,
+                            getOffset = getOffset,
+                        )
+                    }
                 }
             }
         }

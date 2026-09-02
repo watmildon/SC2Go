@@ -31,12 +31,10 @@ import de.westnordost.streetcomplete.screens.main.bottom_sheet.note.LeaveNoteIns
 import de.westnordost.streetcomplete.screens.main.bottom_sheet.split_way.SplitWayForm
 import de.westnordost.streetcomplete.ui.common.quest.LocalElement
 import de.westnordost.streetcomplete.ui.common.quest.LocalGetOffsetCallback
-import de.westnordost.streetcomplete.ui.common.quest.LocalLastMapClick
 import de.westnordost.streetcomplete.ui.common.quest.LocalMapMarkersCallback
 import de.westnordost.streetcomplete.ui.common.quest.LocalMapMetersPerDp
 import de.westnordost.streetcomplete.ui.common.quest.LocalMapRotation
 import de.westnordost.streetcomplete.ui.common.quest.LocalMapTilt
-import de.westnordost.streetcomplete.ui.common.quest.MapClick
 import de.westnordost.streetcomplete.ui.common.quest.Marker
 import de.westnordost.streetcomplete.ui.util.ReplaceBottomSheetTransitionSpec
 import de.westnordost.streetcomplete.ui.util.rememberSerializable
@@ -53,9 +51,6 @@ import org.koin.compose.koinInject
  *         split way form shows markers.
  *
  *  @param getOffset returns the offset on the screen of the given position
- *
- *  @param lastMapClick where the user last clicked the map itself. The address overlay form uses
- *         it to offer the name of a road the user tapped nearby.
  *  */
 @Composable
 fun OverlayFormContainer(
@@ -72,7 +67,6 @@ fun OverlayFormContainer(
     mapMetersPerDp: Double,
     onSetMapMarkers: (Iterable<Marker>) -> Unit,
     getOffset: (position: LatLon) -> Offset?,
-    lastMapClick: MapClick?,
     modifier: Modifier = Modifier,
     countryBoundaries: CountryBoundaries = koinInject(),
     countryInfos: CountryInfos = koinInject(),
@@ -101,7 +95,6 @@ fun OverlayFormContainer(
         LocalMapMetersPerDp provides mapMetersPerDp,
         LocalMapMarkersCallback provides onSetMapMarkers,
         LocalGetOffsetCallback provides getOffset,
-        LocalLastMapClick provides lastMapClick,
     ) {
         AnimatedContent(
             targetState = state,
