@@ -13,14 +13,12 @@ import de.westnordost.streetcomplete.resources.*
 import de.westnordost.streetcomplete.ui.common.dialogs.AreYouSureDialog
 import de.westnordost.streetcomplete.ui.common.quest.AnswerItem
 import de.westnordost.streetcomplete.ui.common.quest.CheckboxGroupQuestForm
-import de.westnordost.streetcomplete.ui.util.rememberSerializable
 import org.jetbrains.compose.resources.stringResource
 
 @Composable
 fun AddBoardTypeForm(
     on: (QuestAction<BoardTypeAnswer>) -> Unit
 ) {
-    var selectedOptions by rememberSerializable { mutableStateOf(emptySet<BoardType>()) }
     var confirmIsMap by remember { mutableStateOf(false) }
 
     CheckboxGroupQuestForm(
