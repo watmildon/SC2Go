@@ -72,6 +72,15 @@ fun IosApp() {
         if (defaults.objectForKey("offthreadgeojson") != null) {
             MapPerf.offThreadGeoJson = defaults.boolForKey("offthreadgeojson")
         }
+        /* Knobs for the battery experiments, driven from the command line so that one binary can
+           be measured in several configurations - the discipline MAP_PIN_PERF.md established, so
+           that no difference between arms is a build difference. */
+        defaults.integerForKey("maxfps").toInt().takeIf { it > 0 }?.let { MapPerf.maxFps = it }
+        defaults.integerForKey("compassms").toInt().takeIf { it > 0 }
+            ?.let { MapPerf.compassIntervalMs = it }
+        MapPerf.autoDrive = defaults.boolForKey("autodrive")
+        defaults.stringForKey("gpsaccuracy")?.takeIf { it.isNotBlank() }?.let { MapPerf.gpsAccuracy = it }
+        defaults.doubleForKey("gpsdistance").takeIf { it > 0.0 }?.let { MapPerf.gpsDistanceM = it }
     }
 
     /* saveable, not just remembered, so that changing the language - which rebuilds the whole

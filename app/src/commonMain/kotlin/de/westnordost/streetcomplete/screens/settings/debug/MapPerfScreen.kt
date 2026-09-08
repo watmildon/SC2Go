@@ -12,6 +12,7 @@ import androidx.compose.material.MaterialTheme
 import androidx.compose.material.Text
 import androidx.compose.material.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -81,6 +82,11 @@ fun MapPerfScreen(
     // during composition, not in a LaunchedEffect: that runs after the first composition, by which
     // point the things being measured have already happened once, unmeasured
     remember { MapPerf.enabled = true }
+    /* ...and off again on the way out. Without this, opening this screen once left the 13
+       instrumentation points in PinsLayers logging - each a console write and a database insert -
+       on the *real* map for the rest of the process, which is both a battery cost and a confound in
+       every later measurement. */
+    DisposableEffect(Unit) { onDispose { MapPerf.enabled = false } }
 
     /* The real icon pool, not a hand-written list: the point is to be representative of what the
        app actually has to rasterise, and there are far more quest types than anyone would list. */

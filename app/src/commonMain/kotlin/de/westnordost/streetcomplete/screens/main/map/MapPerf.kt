@@ -55,6 +55,37 @@ object MapPerf {
     /** Whether the GeoJSON for the pins is built off the main thread. `-offthreadgeojson NO`. */
     var offThreadGeoJson: Boolean = true
 
+    /** Cap the map's frame rate, or null for the platform default. `-maxfps 30`.
+     *
+     *  The first candidate lever for a low-power mode: MapOptions.maximumFps exists in
+     *  maplibre-compose 0.15.0 and the app has never passed it. */
+    var maxFps: Int? = null
+
+    /** Compass sampling interval in milliseconds, or null for [COMPASS_UPDATE_INTERVAL].
+     *  `-compassms 200`. Android and iOS both sample at 33ms, i.e. 30 Hz, whether or not there is
+     *  a location marker on screen to rotate. */
+    var compassIntervalMs: Int? = null
+
+    /** Drive the *real* main screen along a fixed route without a finger, so a power trace can be
+     *  compared between builds and settings. `-autodrive YES`.
+     *
+     *  Deliberately not gated on BuildConfig.DEBUG, exactly as `mapperf` is not: it is reachable
+     *  only by passing a launch argument, which a user cannot do by accident, and gating it would
+     *  mean measuring a debug binary - which is 3-5x slower per operation and would make every
+     *  number meaningless. */
+    var autoDrive: Boolean = false
+
+    /** Location accuracy tier for the main screen's request, by LocationAccuracy name, or null
+     *  for the default (High = kCLLocationAccuracyBest). `-gpsaccuracy Balanced`.
+     *
+     *  For the walk that decides LOW_POWER_PLAN.md C3: whether Balanced (kCLLocationAccuracyHundredMeters)
+     *  still delivers fixes a survey can use, and whether it saves anything. */
+    var gpsAccuracy: String? = null
+
+    /** Distance filter for the main screen's request in metres, or null for the default (1 m).
+     *  `-gpsdistance 5`. Throttles delivery only; the radio is driven by the accuracy tier. */
+    var gpsDistanceM: Double? = null
+
     const val TAG = "MapPerf"
 
     /** Start timing, or return null if instrumentation is off. */

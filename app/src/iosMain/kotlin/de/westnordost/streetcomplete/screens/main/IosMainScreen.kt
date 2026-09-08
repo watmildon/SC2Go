@@ -48,6 +48,7 @@ import de.westnordost.streetcomplete.screens.about.AboutNavHost
 import de.westnordost.streetcomplete.screens.main.controls.LocationState
 import de.westnordost.streetcomplete.screens.main.edithistory.EditHistoryViewModel
 import de.westnordost.streetcomplete.screens.main.map.MainMap
+import de.westnordost.streetcomplete.screens.main.map.MapPerf
 import de.westnordost.streetcomplete.screens.main.map.getTrackBearing
 import de.westnordost.streetcomplete.screens.main.map.layers.Marker as MapMarker
 import de.westnordost.streetcomplete.screens.main.map.maplibre.CameraPosition as MapCameraPosition
@@ -76,6 +77,7 @@ import kotlin.math.sqrt
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
 import kotlinx.coroutines.FlowPreview
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.launch
@@ -93,6 +95,7 @@ import org.maplibre.compose.location.LocationUnavailableReason
 import org.maplibre.compose.location.SystemSettingsLauncher
 import org.maplibre.compose.location.rememberDefaultOrientationProvider
 import org.maplibre.compose.util.ClickResult
+import org.maplibre.spatialk.geojson.Position
 import org.maplibre.spatialk.units.Bearing
 import org.maplibre.spatialk.units.DMS
 
@@ -240,7 +243,9 @@ fun IosMainScreen() {
     /* Which way the device is pointing, clockwise from north, for the cone on the location marker.
        North.clockwiseRotationTo(bearing) and not the other way round: clockwiseRotationTo is
        (argument - receiver), so putting north second negates the heading and mirrors the cone. */
-    val orientationProvider = rememberDefaultOrientationProvider(COMPASS_UPDATE_INTERVAL)
+    val orientationProvider = rememberDefaultOrientationProvider(
+        MapPerf.compassIntervalMs?.milliseconds ?: COMPASS_UPDATE_INTERVAL
+    )
     var deviceBearing by remember { mutableStateOf<Double?>(null) }
     LaunchedEffect(orientationProvider, lifecycleOwner) {
         lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
@@ -250,6 +255,33 @@ fun IosMainScreen() {
             }
         }
     }
+    /* Drives the real map along a fixed route so a power trace can be recorded without a finger
+       on the screen, and compared between two settings of the same binary. Deliberately relative
+       to wherever the map already is, so it works without hard-coding somebody's street. */
+    if (MapPerf.autoDrive) {
+        LaunchedEffect(Unit) {
+            delay(AUTO_DRIVE_SETTLE)
+            val start = cameraState.position.target
+            Log.i(MapPerf.TAG, "=== autodrive: starting at ${start.latitude},${start.longitude} ===")
+            for (pass in 1..AUTO_DRIVE_PASSES) {
+                for ((index, leg) in AUTO_DRIVE_LEGS.withIndex()) {
+                    Log.i(MapPerf.TAG, "--- autodrive pass $pass, leg ${index + 1}/${AUTO_DRIVE_LEGS.size} ---")
+                    cameraState.animateTo(
+                        cameraState.position.copy(
+                            target = Position(
+                                longitude = start.longitude + leg.second,
+                                latitude = start.latitude + leg.first,
+                            ),
+                            zoom = AUTO_DRIVE_ZOOM,
+                        ),
+                        AUTO_DRIVE_LEG_DURATION,
+                    )
+                }
+            }
+            Log.i(MapPerf.TAG, "=== autodrive: finished ===")
+        }
+    }
+
     val isFollowingPosition by viewModel.isFollowingPosition.collectAsState()
     val isNavigationMode by viewModel.isNavigationMode.collectAsState()
     var displayedLocation by remember { mutableStateOf<Location?>(null) }
@@ -803,6 +835,24 @@ private suspend fun CameraState.moveTo(
 /** The most often the compass is sampled. The same as Android's. It is a ceiling on an already
  *  running stream, not a rate the hardware is asked for, and a still device reports nothing. */
 private val COMPASS_UPDATE_INTERVAL = 33.milliseconds
+
+/* The scripted pan used by MapPerf.autoDrive. Offsets in degrees from wherever the map started:
+   0.002 degrees of latitude is roughly 220m, so each leg is a real pan over real downloaded data
+   rather than a twitch. Kept deliberately boring and repeatable - the point is that two runs of it
+   differ only by the setting being tested. */
+private val AUTO_DRIVE_LEGS = listOf(
+    0.0020 to 0.0000,
+    0.0020 to 0.0030,
+    0.0000 to 0.0030,
+    -0.0020 to 0.0030,
+    -0.0020 to 0.0000,
+    0.0000 to 0.0000,
+)
+private const val AUTO_DRIVE_PASSES = 3
+private const val AUTO_DRIVE_ZOOM = 17.0
+private val AUTO_DRIVE_LEG_DURATION = 4000.milliseconds
+/** Long enough for the first data download and the icon warm-up to be out of the way. */
+private val AUTO_DRIVE_SETTLE = 8000.milliseconds
 
 /** How far the map is tilted when it turns in the direction the user is going, as on Android */
 private const val NAVIGATION_MODE_TILT = 60.0
