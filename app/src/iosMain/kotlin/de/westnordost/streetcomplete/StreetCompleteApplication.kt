@@ -6,7 +6,9 @@ import de.westnordost.streetcomplete.data.Cleaner
 import de.westnordost.streetcomplete.data.FeedsUpdater
 import de.westnordost.streetcomplete.data.Preloader
 import de.westnordost.streetcomplete.data.download.tiles.DownloadedTilesController
+import de.westnordost.streetcomplete.data.metrics.IosMetricsCollector
 import de.westnordost.streetcomplete.data.edithistory.EditHistoryController
+import de.westnordost.streetcomplete.data.power.LowPowerMode
 import de.westnordost.streetcomplete.data.preferences.Preferences
 import de.westnordost.streetcomplete.data.preferences.ResurveyIntervalsUpdater
 import de.westnordost.streetcomplete.util.ktx.nowAsEpochMilliseconds
@@ -78,7 +80,17 @@ fun initApp() {
 
     // Android does this by overriding onTrimMemory instead, i.e. not as part of onCreate
     observeMemoryPressure(koin.get<CacheTrimmer>())
+
+    /* No Android counterpart: MetricKit is how the battery and hang questions get answered from
+       real use rather than from a synthetic pan on the simulator. See BATTERY_PLAN.md.
+       LowPowerMode does not read the launch flags, so resolving it here is fine - unlike the
+       LocationUpdatesSource, see CommonModule. */
+    metricsCollector.start(koin.get<LowPowerMode>())
 }
+
+/** Held for the life of the process: MXMetricManager keeps only a weak reference to its
+ *  subscribers, so a local would be collected and no payload would ever arrive. */
+private val metricsCollector = IosMetricsCollector()
 
 /** Held for the life of the process: [Preferences] only keeps a weak reference to its listeners,
  *  so a local would be collected and the language would stop being applied. */
