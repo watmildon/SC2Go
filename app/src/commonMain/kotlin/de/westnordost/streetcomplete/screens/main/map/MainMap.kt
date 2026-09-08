@@ -229,140 +229,140 @@ fun MainMap(
     LaunchedEffect(bottomEdgeInset) { Log.i(EDGE_TAG, "bottom edge strip = $bottomEdgeInset") }
 
     Box(modifier) {
-    MaplibreMap(
-        modifier = Modifier.fillMaxSize(),
-        baseStyle = BaseStyle.Json(BASE_STYLE),
-        zoomRange = 0f..22f,
-        cameraState = cameraState,
-        // StreetComplete draws its own attribution
-        overlay = MapOverlay.None,
-        styleState = styleState,
-        onMapClick = { position, offset -> onClickMapAt(position, offset); ClickResult.Pass },
-        onMapLongClick = onMapLongClick,
-    ) {
-        val languages = listOf(Locale.current.language)
-        val colors = if (MaterialTheme.colors.isLight) MapColors.Light else MapColors.Night
+        MaplibreMap(
+            modifier = Modifier.fillMaxSize(),
+            baseStyle = BaseStyle.Json(BASE_STYLE),
+            zoomRange = 0f..22f,
+            cameraState = cameraState,
+            // StreetComplete draws its own attribution
+            overlay = MapOverlay.None,
+            styleState = styleState,
+            onMapClick = { position, offset -> onClickMapAt(position, offset); ClickResult.Pass },
+            onMapLongClick = onMapLongClick,
+        ) {
+            val languages = listOf(Locale.current.language)
+            val colors = if (MaterialTheme.colors.isLight) MapColors.Light else MapColors.Night
 
-        val overlayIcons = remember(styledElements) { styledElements.overlayIcons() }
+            val overlayIcons = remember(styledElements) { styledElements.overlayIcons() }
 
-        val overlaySource = rememberGeoJsonSource(
-            GeoJsonData.Features(FeatureCollection(styledElements.flatMap { it.toGeoJsonFeatures() })),
-        )
+            val overlaySource = rememberGeoJsonSource(
+                GeoJsonData.Features(FeatureCollection(styledElements.flatMap { it.toGeoJsonFeatures() })),
+            )
 
-        MapStyle(
-            colors = colors,
-            languages = languages,
-            belowRoadsContent = {
-                // left-and-right lines should be rendered behind the actual road
-                if (showOverlay) {
-                    StyleableOverlaySideLayer(
-                        source = overlaySource,
-                        isBridge = false
-                    )
-                }
-            },
-            belowRoadsOnBridgeContent = {
-                // left-and-right lines should be rendered behind the actual bridge road
-                if (showOverlay) {
-                    StyleableOverlaySideLayer(
-                        source = overlaySource,
-                        isBridge = true
-                    )
-                }
-            },
-            belowLabelsContent = {
-                // labels should be on top of other layers
-                DownloadedAreaLayer(downloadedTiles)
-                if (showOverlay) {
-                    StyleableOverlayLayers(
-                        source = overlaySource,
-                        onClickElement = { properties ->
-                            viewModel.getElementKey(properties)?.let { onClickOverlayElement(it) }
-                        }
-                    )
-                }
-                TracksLayers(trackpoints, isRecordingTracks, oldTrackpointsLists)
-            },
-            aboveLabelsContent = {
-                // these are always on top of everything else (including labels)
-                if (showOverlay) {
-                    StyleableOverlayLabelLayer(
-                        source = overlaySource,
-                        icons = overlayIcons,
-                        color = colors.text,
-                        haloColor = colors.textOutline,
-                        onClickElement = { properties ->
-                            viewModel.getElementKey(properties)?.let { onClickOverlayElement(it) }
-                        }
-                    )
-                }
-                shownMarkers?.let { markers ->
-                    GeometryMarkersLayers(shownMarkers)
-                }
-                shownBottomSheet?.geometry?.let { geometry ->
-                    FocusedGeometryLayers(geometry)
-                }
+            MapStyle(
+                colors = colors,
+                languages = languages,
+                belowRoadsContent = {
+                    // left-and-right lines should be rendered behind the actual road
+                    if (showOverlay) {
+                        StyleableOverlaySideLayer(
+                            source = overlaySource,
+                            isBridge = false
+                        )
+                    }
+                },
+                belowRoadsOnBridgeContent = {
+                    // left-and-right lines should be rendered behind the actual bridge road
+                    if (showOverlay) {
+                        StyleableOverlaySideLayer(
+                            source = overlaySource,
+                            isBridge = true
+                        )
+                    }
+                },
+                belowLabelsContent = {
+                    // labels should be on top of other layers
+                    DownloadedAreaLayer(downloadedTiles)
+                    if (showOverlay) {
+                        StyleableOverlayLayers(
+                            source = overlaySource,
+                            onClickElement = { properties ->
+                                viewModel.getElementKey(properties)?.let { onClickOverlayElement(it) }
+                            }
+                        )
+                    }
+                    TracksLayers(trackpoints, isRecordingTracks, oldTrackpointsLists)
+                },
+                aboveLabelsContent = {
+                    // these are always on top of everything else (including labels)
+                    if (showOverlay) {
+                        StyleableOverlayLabelLayer(
+                            source = overlaySource,
+                            icons = overlayIcons,
+                            color = colors.text,
+                            haloColor = colors.textOutline,
+                            onClickElement = { properties ->
+                                viewModel.getElementKey(properties)?.let { onClickOverlayElement(it) }
+                            }
+                        )
+                    }
+                    shownMarkers?.let { markers ->
+                        GeometryMarkersLayers(shownMarkers)
+                    }
+                    shownBottomSheet?.geometry?.let { geometry ->
+                        FocusedGeometryLayers(geometry)
+                    }
 
-                if (location != null) {
-                    CurrentLocationLayers(location = location, rotation = rotation())
-                }
+                    if (location != null) {
+                        CurrentLocationLayers(location = location, rotation = rotation())
+                    }
 
-                /* Load every quest icon once, before any of them is needed. Resolving a pin icon
-                   the first time costs about a millisecond and finding one already loaded about a
-                   tenth of that, so the cost worth removing is the first sight of an icon - which
-                   while panning arrives in bursts, as a new kind of quest comes into view. Measured
-                   over a fixed pan: the worst single hitch went from 128ms to 41ms, for one 165ms
-                   at map open. See research/MAP_PIN_PERF.md.
+                    /* Load every quest icon once, before any of them is needed. Resolving a pin icon
+                       the first time costs about a millisecond and finding one already loaded about a
+                       tenth of that, so the cost worth removing is the first sight of an icon - which
+                       while panning arrives in bursts, as a new kind of quest comes into view. Measured
+                       over a fixed pan: the worst single hitch went from 128ms to 41ms, for one 165ms
+                       at map open. See research/MAP_PIN_PERF.md.
 
-                   It draws nothing, and it is given a list that never changes, so it composes once
-                   and is skipped from then on. */
-                /* Every icon a pin can ever have - all quest types and overlays, plus the two
-                   icons note edits use - resolved once, with the icon expression built from them
-                   once. Panning changes which of them are on screen but never which exist, so
-                   there is nothing here for a pan to invalidate. See research/MAP_PIN_PERF.md. */
-                val allEditTypes: AllEditTypes = koinInject()
-                val allPinIcons = remember(allEditTypes) {
-                    (allEditTypes.map { it.icon } +
-                        listOf(Res.drawable.quest_create_note, Res.drawable.quest_notes)).distinct()
-                }
-                val hoistedIconImage = remember { mutableStateOf<Expression<ImageValue>?>(null) }
-                PinIconImage(allPinIcons, hoistedIconImage)
-                val iconImage = hoistedIconImage.value.takeIf { MapPerf.hoistIconExpression }
+                       It draws nothing, and it is given a list that never changes, so it composes once
+                       and is skipped from then on. */
+                    /* Every icon a pin can ever have - all quest types and overlays, plus the two
+                       icons note edits use - resolved once, with the icon expression built from them
+                       once. Panning changes which of them are on screen but never which exist, so
+                       there is nothing here for a pan to invalidate. See research/MAP_PIN_PERF.md. */
+                    val allEditTypes: AllEditTypes = koinInject()
+                    val allPinIcons = remember(allEditTypes) {
+                        (allEditTypes.map { it.icon } +
+                            listOf(Res.drawable.quest_create_note, Res.drawable.quest_notes)).distinct()
+                    }
+                    val hoistedIconImage = remember { mutableStateOf<Expression<ImageValue>?>(null) }
+                    PinIconImage(allPinIcons, hoistedIconImage)
+                    val iconImage = hoistedIconImage.value.takeIf { MapPerf.hoistIconExpression }
 
-                // normal quest pins are not shown while edit history sidebar is open
-                if (isShowingUndoHistorySidebar) {
-                    PinsLayers(
-                        pins = editHistoryPins,
-                        onClickPin = { properties ->
-                            viewModel.getEditKey(properties)?.let { onClickEdit(it) }
-                        },
-                        onZoomToCluster = ::zoomToCluster,
-                        iconImage = iconImage,
-                        prebuiltFeatures = editHistoryFeatures,
-                    )
-                } else {
-                    /* hidden rather than removed: leaving the composition would throw away the
-                       clustered source and every pin image, and opening or closing a form would
-                       then rebuild and re-cluster the lot and re-decode a hundred-odd icons.
-                       Android sets visibility on the layers for the same reason. */
-                    PinsLayers(
-                        pins = questPins,
-                        onClickPin = { properties ->
-                            viewModel.getQuestKey(properties)?.let { onClickQuest(it) }
-                        },
-                        onZoomToCluster = ::zoomToCluster,
-                        visible = showQuestPins,
-                        iconImage = iconImage,
-                        prebuiltFeatures = questFeatures,
-                    )
-                }
+                    // normal quest pins are not shown while edit history sidebar is open
+                    if (isShowingUndoHistorySidebar) {
+                        PinsLayers(
+                            pins = editHistoryPins,
+                            onClickPin = { properties ->
+                                viewModel.getEditKey(properties)?.let { onClickEdit(it) }
+                            },
+                            onZoomToCluster = ::zoomToCluster,
+                            iconImage = iconImage,
+                            prebuiltFeatures = editHistoryFeatures,
+                        )
+                    } else {
+                        /* hidden rather than removed: leaving the composition would throw away the
+                           clustered source and every pin image, and opening or closing a form would
+                           then rebuild and re-cluster the lot and re-decode a hundred-odd icons.
+                           Android sets visibility on the layers for the same reason. */
+                        PinsLayers(
+                            pins = questPins,
+                            onClickPin = { properties ->
+                                viewModel.getQuestKey(properties)?.let { onClickQuest(it) }
+                            },
+                            onZoomToCluster = ::zoomToCluster,
+                            visible = showQuestPins,
+                            iconImage = iconImage,
+                            prebuiltFeatures = questFeatures,
+                        )
+                    }
 
-                selectedPin?.let { (icon, locations) ->
-                    SelectedPinsLayer(icon, locations)
+                    selectedPin?.let { (icon, locations) ->
+                        SelectedPinsLayer(icon, locations)
+                    }
                 }
-            }
-        )
-    }
+            )
+        }
 
         /* Declared after the map, so they are hit first. No consume calls are needed - being the
            hit target is the whole mechanism - but consuming costs nothing and keeps the intent
