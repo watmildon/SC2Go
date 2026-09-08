@@ -33,11 +33,13 @@ import androidx.lifecycle.repeatOnLifecycle
 import de.westnordost.streetcomplete.ApplicationConstants
 import de.westnordost.streetcomplete.data.download.tiles.asBoundingBoxOfEnclosingTiles
 import de.westnordost.streetcomplete.data.location.Location
+import de.westnordost.streetcomplete.data.location.LocationUpdatesSource
 import de.westnordost.streetcomplete.data.location.SurveyChecker
 import de.westnordost.streetcomplete.data.osm.geometry.ElementGeometry
 import de.westnordost.streetcomplete.data.osm.mapdata.BoundingBox
 import de.westnordost.streetcomplete.data.osm.mapdata.LatLon
 import de.westnordost.streetcomplete.data.osmtracks.Trackpoint
+import de.westnordost.streetcomplete.data.osmtracks.isTrackGap
 import de.westnordost.streetcomplete.data.preferences.Preferences
 import de.westnordost.streetcomplete.data.quest.AutoSyncer
 import de.westnordost.streetcomplete.resources.Res
@@ -89,8 +91,6 @@ import org.maplibre.compose.camera.CameraPosition
 import org.maplibre.compose.camera.CameraState
 import org.maplibre.compose.camera.rememberCameraState
 import org.maplibre.compose.location.LocationEvent
-import org.maplibre.compose.location.LocationProvider
-import org.maplibre.compose.location.LocationRequest
 import org.maplibre.compose.location.LocationUnavailableReason
 import org.maplibre.compose.location.SystemSettingsLauncher
 import org.maplibre.compose.location.rememberDefaultOrientationProvider
@@ -115,7 +115,9 @@ fun IosMainScreen() {
     /* uploads edits as they are made and downloads around the user's location, the same way
        MainActivity hooks it into its lifecycle on Android */
     val autoSyncer: AutoSyncer = koinInject()
-    val locationProvider: LocationProvider = koinInject()
+    /* the one location stream, shared with the AutoSyncer - so that there is one
+       CLLocationManager, not one per collector, see LocationUpdatesSource */
+    val locationUpdatesSource: LocationUpdatesSource = koinInject()
     /* not koinInject: upstream replaced the Koin binding with this composable, and the binding is
        gone as of the maplibre-compose merge */
     val mapAppLauncher = rememberMapAppLauncher()
@@ -404,11 +406,19 @@ fun IosMainScreen() {
         }
     }
 
+    /* Recording a track or following the direction of travel both need precise fixes whatever
+       the stream is otherwise asked for, so the stream is told about them - continuously, as they
+       are flows, and not only from here: these are the same flows the controls below write to. */
+    LaunchedEffect(locationUpdatesSource) {
+        launch { viewModel.isRecordingTracks.collect { locationUpdatesSource.isRecordingTracks.value = it } }
+        launch { viewModel.isNavigationMode.collect { locationUpdatesSource.isNavigationMode.value = it } }
+    }
+
     val surveyChecker: SurveyChecker = koinInject()
     // only while the app is in the foreground, the way Android's observe() is lifecycle scoped
-    LaunchedEffect(locationProvider, lifecycleOwner) {
+    LaunchedEffect(locationUpdatesSource, lifecycleOwner) {
         lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
-        locationProvider.updates(LocationRequest()).collectLatest { event ->
+        locationUpdatesSource.updates.collectLatest { event ->
             viewModel.locationState.value = when (event) {
                 is LocationEvent.Fix -> LocationState.UPDATING
                 is LocationEvent.Unavailable -> when (event.reason) {
@@ -429,16 +439,10 @@ fun IosMainScreen() {
                     if (location.accuracy <= MIN_TRACK_ACCURACY) {
                         val now = nowAsEpochMilliseconds()
                         /* after a gap - backgrounded, or no reception - the previous points say
-                           nothing about which way the user is going now, and taking a bearing
-                           across the gap would turn the map to a heading they are not travelling.
-                           So start a new stretch, as Android does - but never while recording, or
-                           the track attached to the note would be cut down to whatever came
-                           after the gap. */
-                        val last = track.lastOrNull()
-                        if (last != null &&
-                            !viewModel.isRecordingTracks.value &&
-                            now - last.time > MAX_TIME_BETWEEN_LOCATIONS
-                        ) {
+                           nothing about which way the user is going now, so start a new stretch as
+                           Android does. What counts as a gap, and why never while recording, is
+                           with the rule itself in isTrackGap. */
+                        if (isTrackGap(track.lastOrNull(), now, location.position, viewModel.isRecordingTracks.value)) {
                             startNewTrack()
                         }
                         /* elevation 0: the shared Location type has no altitude, so it is dropped in
@@ -557,8 +561,9 @@ fun IosMainScreen() {
                 }
             },
             location = displayedLocation,
-            /* a lambda so that the compass, which reports up to 30 times a second, recomposes the
-               map's location layers rather than this whole screen. The map's own bearing comes
+            /* a lambda, and one the map hands on unread to CurrentLocationLayers, so that the
+               compass - which reports up to 30 times a second - recomposes only the location
+               marker, not the map's layers and not this whole screen. The map's own bearing comes
                off because the cone is rotated against the screen, not against the map. */
             rotation = { deviceBearing?.let { (it - cameraState.position.bearing).toFloat() } },
             shownBottomSheet = shownBottomSheet,
@@ -868,5 +873,3 @@ private const val TRACK_BEARING_LOOKBACK = 200
  *  stay above [TRACK_BEARING_LOOKBACK], which is what is kept back each time. */
 private const val TRACK_MAX_DRAWN_POINTS = 400
 
-/** A longer gap than this between fixes starts the track over, as on Android */
-private const val MAX_TIME_BETWEEN_LOCATIONS = 60L * 1000

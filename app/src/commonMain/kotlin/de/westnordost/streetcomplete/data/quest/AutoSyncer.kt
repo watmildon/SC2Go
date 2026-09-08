@@ -11,6 +11,7 @@ import de.westnordost.streetcomplete.data.download.DownloadProgressSource
 import de.westnordost.streetcomplete.data.download.strategy.MobileDataAutoDownloadStrategy
 import de.westnordost.streetcomplete.data.download.strategy.WifiAutoDownloadStrategy
 import de.westnordost.streetcomplete.data.download.tiles.DownloadedTilesController
+import de.westnordost.streetcomplete.data.location.LocationUpdatesSource
 import de.westnordost.streetcomplete.data.osm.mapdata.LatLon
 import de.westnordost.streetcomplete.data.preferences.Autosync
 import de.westnordost.streetcomplete.data.preferences.Preferences
@@ -19,17 +20,14 @@ import de.westnordost.streetcomplete.data.user.UserLoginSource
 import de.westnordost.streetcomplete.data.visiblequests.TeamModeQuestFilterSource
 import de.westnordost.streetcomplete.util.ktx.format
 import de.westnordost.streetcomplete.util.logs.Log
+import de.westnordost.streetcomplete.util.math.distanceTo
 import kotlinx.coroutines.CoroutineName
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancelChildren
 import kotlinx.coroutines.launch
-import org.maplibre.compose.location.LocationAccuracy
 import org.maplibre.compose.location.LocationEvent
-import org.maplibre.compose.location.LocationProvider
-import org.maplibre.compose.location.LocationRequest
 import org.maplibre.spatialk.units.extensions.meters
-import kotlin.time.Duration.Companion.seconds
 
 /** Automatically downloads map data around the user's location and uploads edits.
  *
@@ -40,7 +38,7 @@ class AutoSyncer(
     private val uploadController: UploadController,
     private val mobileDataDownloadStrategy: MobileDataAutoDownloadStrategy,
     private val wifiDownloadStrategy: WifiAutoDownloadStrategy,
-    private val locationProvider: LocationProvider,
+    private val locationUpdatesSource: LocationUpdatesSource,
     private val activeNetworkConnection: ActiveNetworkConnection,
     private val unsyncedChangesCountSource: UnsyncedChangesCountSource,
     private val downloadProgressSource: DownloadProgressSource,
@@ -110,15 +108,25 @@ class AutoSyncer(
         }
         coroutineScope.launch {
             owner.repeatOnLifecycle(Lifecycle.State.STARTED) {
-                val request = LocationRequest(LocationAccuracy.High, 30.seconds, 100.meters)
-                locationProvider.updates(request).collect { locationEvent ->
-                    if (locationEvent is LocationEvent.Fix) {
-                        val (position, accuracy) = locationEvent.location.position
-                        if (accuracy == null || accuracy < 300.meters) {
-                            pos = LatLon(position.latitude, position.longitude)
-                            triggerAutoDownload()
-                        }
-                    }
+                /* The shared stream rather than a request of its own: on iOS each collection of
+                   updates() is its own CLLocationManager, and the process runs at the most
+                   aggressive of them - so a request for High here would pin the GPS at
+                   kCLLocationAccuracyBest no matter what the main screen asks for. Any fix under
+                   300 m is accepted below, so the stream's accuracy is always enough.
+
+                   The stream delivers a fix every metre or so, where this used to ask for one
+                   every 100 m, and a download check is not free: it probes the network, logs to
+                   the database and queries the downloaded tiles and element counts. So the 100 m
+                   filter is applied here instead, against the position of the last check. */
+                locationUpdatesSource.updates.collect { locationEvent ->
+                    if (locationEvent !is LocationEvent.Fix) return@collect
+                    val (position, accuracy) = locationEvent.location.position
+                    if (accuracy != null && accuracy >= 300.meters) return@collect
+                    val newPos = LatLon(position.latitude, position.longitude)
+                    val lastPos = pos
+                    if (lastPos != null && lastPos.distanceTo(newPos) < MIN_DISTANCE_BETWEEN_DOWNLOAD_CHECKS) return@collect
+                    pos = newPos
+                    triggerAutoDownload()
                 }
             }
         }
@@ -187,5 +195,8 @@ class AutoSyncer(
 
     companion object {
         private const val TAG = "QuestAutoSyncer"
+
+        /** In metres: the distance filter this used to request for itself */
+        private const val MIN_DISTANCE_BETWEEN_DOWNLOAD_CHECKS = 100.0
     }
 }

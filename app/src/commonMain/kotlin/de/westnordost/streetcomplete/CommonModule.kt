@@ -17,6 +17,8 @@ import de.westnordost.streetcomplete.data.download.tiles.DownloadedTilesDao
 import de.westnordost.streetcomplete.data.download.tiles.DownloadedTilesSource
 import de.westnordost.streetcomplete.data.edithistory.EditHistoryController
 import de.westnordost.streetcomplete.data.edithistory.EditHistorySource
+import de.westnordost.streetcomplete.data.location.LocationRequestSettings
+import de.westnordost.streetcomplete.data.location.LocationUpdatesSource
 import de.westnordost.streetcomplete.data.location.SurveyChecker
 import de.westnordost.streetcomplete.data.logs.LogsController
 import de.westnordost.streetcomplete.data.logs.LogsDao
@@ -175,6 +177,7 @@ import de.westnordost.streetcomplete.screens.main.edithistory.EditHistoryViewMod
 import de.westnordost.streetcomplete.screens.main.edithistory.EditHistoryViewModelImpl
 import de.westnordost.streetcomplete.screens.main.map.MainMapViewModel
 import de.westnordost.streetcomplete.screens.main.map.MainMapViewModelImpl
+import de.westnordost.streetcomplete.screens.main.map.MapPerf
 import de.westnordost.streetcomplete.screens.main.map.sources.EditHistoryPinsSource
 import de.westnordost.streetcomplete.screens.main.map.sources.MapQuestPinsSource
 import de.westnordost.streetcomplete.screens.main.map.sources.StyleableOverlaySource
@@ -218,6 +221,7 @@ import io.ktor.client.plugins.compression.ContentEncoding
 import io.ktor.client.plugins.defaultRequest
 import io.ktor.http.HttpHeaders
 import io.ktor.http.userAgent
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.io.files.FileSystem
 import kotlinx.io.files.SystemFileSystem
@@ -474,6 +478,25 @@ val commonModule = module {
     single { SurveyChecker() }
 
     single { LowPowerMode(get(), get()) }
+
+    /* Created when the main screen first injects it, which on iOS is after IosApp has read the
+       launch flags into MapPerf - so reading them here, once, sees them. That is an ordering to
+       keep: resolving this - or the AutoSyncer, which depends on it - from initApp() would run
+       before the flags are parsed and silently read the defaults.
+
+       The flags are the A/B harness and win over the mode: an accuracy flag is always what is
+       asked for (C3 is pending), and a distance flag is too - only without one does the mode
+       decide the distance filter. See LocationRequestSettings.forMode. */
+    single {
+        val flags = LocationRequestSettings.fromFlags(MapPerf.gpsAccuracy, MapPerf.gpsDistanceM)
+        val flagDistanceGiven = MapPerf.gpsDistanceM != null
+        LocationUpdatesSource(
+            get(),
+            get<LowPowerMode>().isActive.map { lowPower ->
+                LocationRequestSettings.forMode(flags, lowPower, flagDistanceGiven)
+            }
+        )
+    }
 
     //endregion
 

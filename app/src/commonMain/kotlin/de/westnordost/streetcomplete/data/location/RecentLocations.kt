@@ -33,9 +33,11 @@ class RecentLocations(
     }
 
     fun add(location: Location): Unit = lock.withLock {
-        // only add newer locations
-        val firstDuration = locations.firstOrNull()?.elapsedDuration ?: Duration.ZERO
-        if (firstDuration >= location.elapsedDuration) return@withLock
+        /* only add newer locations. Anything goes into an empty deque: elapsedDuration is measured
+           from an origin that need not be earlier than every fix - a fix cached from before the
+           process started reads negative, see toLocation() - so there is no floor to compare to */
+        val firstDuration = locations.firstOrNull()?.elapsedDuration
+        if (firstDuration != null && firstDuration >= location.elapsedDuration) return@withLock
 
         // clear from deque all older than `maxAge` before inserting new
         while (

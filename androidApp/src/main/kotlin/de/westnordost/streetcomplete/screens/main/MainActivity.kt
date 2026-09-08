@@ -340,6 +340,8 @@ class MainActivity :
                 mainBottomSheetViewModel.closeBottomSheet()
             }
         }
+        // TODO collect LocationUpdatesSource.updates instead, as iOS does: AutoSyncer collects the
+        //  shared stream now, so this is the one remaining collection with a request of its own
         observe(locationProvider.updates(LocationRequest())) { locationEvent ->
             viewModel.locationState.value = when (locationEvent) {
                 is LocationEvent.Fix -> LocationState.UPDATING

@@ -29,12 +29,18 @@ import org.maplibre.compose.sources.GeoJsonData
 import org.maplibre.compose.sources.rememberGeoJsonSource
 import org.maplibre.compose.util.MaplibreComposable
 
-/** Displays the location + direction + accuracy marker on the map */
+/** Displays the location + direction + accuracy marker on the map.
+ *
+ *  [rotation] is a lambda, read here and nowhere above: the compass behind it reports up to 30
+ *  times a second, and reading it in the caller's layer lambda would recompose every layer in it
+ *  each time. Read here, only this composable recomposes, and of its layers only the direction
+ *  cone's expression changes. */
 @Composable @MaplibreComposable
 fun CurrentLocationLayers(
     location: Location,
-    rotation: Float?
+    rotation: () -> Float?
 ) {
+    val rotation = rotation()
     val animatedPosition by animateLatLonAsState(targetValue = location.position)
 
     val animatedAccuracy by animateFloatAsState(

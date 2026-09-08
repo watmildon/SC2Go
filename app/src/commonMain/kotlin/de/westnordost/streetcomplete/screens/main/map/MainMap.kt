@@ -320,7 +320,8 @@ fun MainMap(
                     }
 
                     if (location != null) {
-                        CurrentLocationLayers(location = location, rotation = rotation())
+                        // the lambda itself, not its value: see CurrentLocationLayers for why
+                        CurrentLocationLayers(location = location, rotation = rotation)
                     }
 
                     /* Load every quest icon once, before any of them is needed. Resolving a pin icon

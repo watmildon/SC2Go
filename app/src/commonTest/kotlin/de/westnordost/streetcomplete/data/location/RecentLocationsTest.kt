@@ -2,11 +2,17 @@ package de.westnordost.streetcomplete.data.location
 
 import de.westnordost.streetcomplete.data.osm.mapdata.LatLon
 import de.westnordost.streetcomplete.util.ktx.asSequenceOfPairs
+import de.westnordost.streetcomplete.util.ktx.toLocation
 import de.westnordost.streetcomplete.util.math.translate
+import org.maplibre.compose.location.PositionWithAccuracy
+import org.maplibre.spatialk.geojson.Position
+import org.maplibre.spatialk.units.extensions.meters
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
+import kotlin.time.Duration
 import kotlin.time.Duration.Companion.seconds
+import kotlin.time.TimeSource
 
 class RecentLocationsTest {
     @Test fun `getAll returns nothing when empty`() {
@@ -105,4 +111,49 @@ class RecentLocationsTest {
         r.add(l4)
         assertEquals(listOf(l4, l3), r.getAll().toList())
     }
+
+    /** Through toLocation(), i.e. with the elapsedDuration the app really stores, and not one
+     *  made up for the test: it used to store the fix's *age*, which is near zero for every fresh
+     *  fix and shrinks as they get fresher - so every fix after the first was rejected as "not
+     *  newer", nothing ever expired, and a survey was judged against one location. */
+    @Test fun keepsFixesArrivingInOrderThroughToLocation() {
+        val r = RecentLocations(10.seconds, 1.0, 1.seconds)
+        val l1 = fixTaken(6.seconds.ago(), LatLon(0.0, 0.0))
+        val l2 = fixTaken(4.seconds.ago(), LatLon(1.0, 0.0))
+        val l3 = fixTaken(2.seconds.ago(), LatLon(2.0, 0.0))
+
+        r.add(l1)
+        r.add(l2)
+        r.add(l3)
+
+        assertEquals(listOf(l3, l2, l1), r.getAll().toList())
+    }
+
+    @Test fun expiresFixesThroughToLocation() {
+        val r = RecentLocations(10.seconds, 1.0, 1.seconds)
+        val old = fixTaken(15.seconds.ago(), LatLon(0.0, 0.0))
+        val recent = fixTaken(2.seconds.ago(), LatLon(1.0, 0.0))
+
+        r.add(old)
+        r.add(recent)
+
+        assertEquals(listOf(recent), r.getAll().toList())
+    }
+
+    /** The store used to compare against zero when empty, which assumed a clock counting from
+     *  boot. The origin toLocation() counts from is later than a fix cached before it. */
+    @Test fun addsLocationBeforeTheOriginToAnEmptyStore() {
+        val r = RecentLocations(10.seconds, 1.0, 1.seconds)
+        val l1 = Location(LatLon(0.0, 0.0), 1f, (-5).seconds)
+        r.add(l1)
+        assertEquals(listOf(l1), r.getAll().toList())
+    }
+
+    private fun Duration.ago() = TimeSource.Monotonic.markNow() - this
+
+    private fun fixTaken(at: TimeSource.Monotonic.ValueTimeMark, position: LatLon): Location =
+        org.maplibre.compose.location.Location(
+            position = PositionWithAccuracy(Position(position.longitude, position.latitude), 1.meters),
+            timestamp = at,
+        ).toLocation()
 }
