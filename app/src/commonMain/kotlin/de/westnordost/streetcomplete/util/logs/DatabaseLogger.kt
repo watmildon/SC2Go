@@ -1,5 +1,6 @@
 package de.westnordost.streetcomplete.util.logs
 
+import de.westnordost.streetcomplete.BuildConfig
 import de.westnordost.streetcomplete.data.logs.LogLevel
 import de.westnordost.streetcomplete.data.logs.LogLevel.*
 import de.westnordost.streetcomplete.data.logs.LogMessage
@@ -13,7 +14,16 @@ import kotlinx.coroutines.IO
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 
-class DatabaseLogger(private val logsController: LogsController) : Logger {
+class DatabaseLogger(
+    private val logsController: LogsController,
+    /** The lowest level that is actually written.
+     *
+     *  Every accepted line is a row inserted into the log database, so this is not free the way a
+     *  dropped console line is: a release measurement of the map produced 13,602 of them in 210
+     *  seconds, which is a material share of the app's own load and lands while the map is trying
+     *  to draw. VERBOSE and DEBUG are for working on the app, so they are not written in release. */
+    private val minLevel: LogLevel = if (BuildConfig.DEBUG) VERBOSE else INFO,
+) : Logger {
     private val coroutineScope = CoroutineScope(
         SupervisorJob() + CoroutineName("DatabaseLogger") + Dispatchers.IO +
         /* without this, a failed log write is unhandled, which on Kotlin/Native takes down the
@@ -46,6 +56,8 @@ class DatabaseLogger(private val logsController: LogsController) : Logger {
     }
 
     private fun log(level: LogLevel, tag: String, message: String, exception: Throwable? = null) {
+        // before the launch, so a dropped line does not even cost a coroutine
+        if (level < minLevel) return
         coroutineScope.launch {
             logsController.add(LogMessage(
                 level = level,
