@@ -1,17 +1,30 @@
 package de.westnordost.streetcomplete.screens.main.map
 
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.width
 import androidx.compose.material.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.intl.Locale
 import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.DpRect
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.text.intl.Locale
+import de.westnordost.streetcomplete.data.AllEditTypes
 import de.westnordost.streetcomplete.data.edithistory.EditKey
 import de.westnordost.streetcomplete.data.location.Location
 import de.westnordost.streetcomplete.data.osm.mapdata.ElementKey
@@ -19,7 +32,8 @@ import de.westnordost.streetcomplete.data.osm.mapdata.LatLon
 import de.westnordost.streetcomplete.data.quest.QuestKey
 import de.westnordost.streetcomplete.data.quest.QuestTypeRegistry
 import de.westnordost.streetcomplete.resources.Res
-import de.westnordost.streetcomplete.util.math.distanceTo
+import de.westnordost.streetcomplete.resources.quest_create_note
+import de.westnordost.streetcomplete.resources.quest_notes
 import de.westnordost.streetcomplete.screens.main.ShownBottomSheet
 import de.westnordost.streetcomplete.screens.main.map.layers.CurrentLocationLayers
 import de.westnordost.streetcomplete.screens.main.map.layers.DownloadedAreaLayer
@@ -27,21 +41,27 @@ import de.westnordost.streetcomplete.screens.main.map.layers.FocusedGeometryLaye
 import de.westnordost.streetcomplete.screens.main.map.layers.GeometryMarkersLayers
 import de.westnordost.streetcomplete.screens.main.map.layers.Marker
 import de.westnordost.streetcomplete.screens.main.map.layers.PINS_CLICKABLE_LAYERS
+import de.westnordost.streetcomplete.screens.main.map.layers.PinIconImage
 import de.westnordost.streetcomplete.screens.main.map.layers.PinsLayers
+import de.westnordost.streetcomplete.screens.main.map.layers.STYLEABLE_OVERLAY_CLICKABLE_LAYERS
 import de.westnordost.streetcomplete.screens.main.map.layers.SelectedPinsLayer
 import de.westnordost.streetcomplete.screens.main.map.layers.StyleableOverlayLabelLayer
-import de.westnordost.streetcomplete.screens.main.map.layers.STYLEABLE_OVERLAY_CLICKABLE_LAYERS
 import de.westnordost.streetcomplete.screens.main.map.layers.StyleableOverlayLayers
 import de.westnordost.streetcomplete.screens.main.map.layers.StyleableOverlaySideLayer
 import de.westnordost.streetcomplete.screens.main.map.layers.TracksLayers
 import de.westnordost.streetcomplete.screens.main.map.layers.overlayIcons
+import de.westnordost.streetcomplete.screens.main.map.layers.pinFeatures
 import de.westnordost.streetcomplete.screens.main.map.layers.toGeoJsonFeatures
+import de.westnordost.streetcomplete.util.logs.Log
+import de.westnordost.streetcomplete.util.math.distanceTo
 import kotlinx.coroutines.launch
+import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
 import org.maplibre.compose.camera.CameraPosition
-import org.koin.compose.koinInject
 import org.maplibre.compose.camera.CameraState
 import org.maplibre.compose.camera.rememberCameraState
+import org.maplibre.compose.expressions.ast.Expression
+import org.maplibre.compose.expressions.value.ImageValue
 import org.maplibre.compose.map.MaplibreMap
 import org.maplibre.compose.overlay.MapOverlay
 import org.maplibre.compose.sources.GeoJsonData
@@ -54,14 +74,6 @@ import org.maplibre.compose.util.MapClickHandler
 import org.maplibre.spatialk.geojson.FeatureCollection
 import org.maplibre.spatialk.geojson.Geometry
 import org.maplibre.spatialk.geojson.Position
-import androidx.compose.runtime.mutableStateOf
-import de.westnordost.streetcomplete.data.AllEditTypes
-import de.westnordost.streetcomplete.resources.quest_create_note
-import de.westnordost.streetcomplete.resources.quest_notes
-import de.westnordost.streetcomplete.screens.main.map.layers.PinIconImage
-import de.westnordost.streetcomplete.screens.main.map.layers.pinFeatures
-import org.maplibre.compose.expressions.ast.Expression
-import org.maplibre.compose.expressions.value.ImageValue
 
 /**
  * MapLibre Map with StreetComplete theme and all the StreetComplete specific things displayed on
@@ -194,8 +206,31 @@ fun MainMap(
         }
     }
 
+    /* The edge strips are siblings placed *after* the map, not a guard wrapped around it.
+       Two earlier attempts consumed the touch on PointerEventPass.Initial and failed, because
+       maplibre-compose never looks at consumption: MapInput.kt collects awaitPointerEvent() on the
+       Main pass and acts on every event it is handed, with no isConsumed check anywhere in the
+       file. Consumption is only a flag; every hit node still gets every event.
+
+       Hit testing is the lever that does work. InnerNodeCoordinator.hitTestChild walks children in
+       reverse z-order and stops once one is directly hit, unless that node opts into sharing with
+       siblings - which a plain pointerInput does not. So a strip declared after the map is the only
+       hit target for a press that begins inside it, and the map is never on the dispatch path at
+       all. The path is fixed at the press for the life of that pointer.
+
+       The map still draws full-bleed underneath, and the screen's own controls are declared later
+       still, so they keep winning hit tests exactly as before. */
+    /* The home indicator's own safe-area height rather than a guessed 34dp. Logged once, because
+       what iOS actually reports here has not been verified and a zero would silently disable the
+       strip. */
+    val bottomEdgeInset = with(LocalDensity.current) {
+        WindowInsets.safeDrawing.getBottom(this).toDp()
+    }.takeIf { it > 0.dp } ?: EDGE_INSET_BOTTOM_FALLBACK
+    LaunchedEffect(bottomEdgeInset) { Log.i(EDGE_TAG, "bottom edge strip = $bottomEdgeInset") }
+
+    Box(modifier) {
     MaplibreMap(
-        modifier = modifier,
+        modifier = Modifier.fillMaxSize(),
         baseStyle = BaseStyle.Json(BASE_STYLE),
         zoomRange = 0f..22f,
         cameraState = cameraState,
@@ -328,6 +363,17 @@ fun MainMap(
             }
         )
     }
+
+        /* Declared after the map, so they are hit first. No consume calls are needed - being the
+           hit target is the whole mechanism - but consuming costs nothing and keeps the intent
+           obvious if this is ever read next to the old approach. */
+        SystemGestureEdgeStrip(
+            Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(bottomEdgeInset), "bottom"
+        )
+        SystemGestureEdgeStrip(
+            Modifier.align(Alignment.CenterStart).fillMaxHeight().width(EDGE_INSET_LEFT), "left"
+        )
+    }
 }
 
 // need to refer to the local (font) resources platform-independently
@@ -347,6 +393,35 @@ internal val BASE_STYLE = """
       "layers": []
     }
     """.trimIndent()
+
+/** A transparent strip that exists only to be the hit target where a system gesture lives, so the
+ *  map underneath is never dispatched the touch at all. See the comment at the Box in [MainMap]
+ *  for why this is a sibling rather than a guard wrapped around the map. */
+@Composable
+private fun SystemGestureEdgeStrip(modifier: Modifier, label: String) {
+    Box(modifier.pointerInput(label) {
+        awaitPointerEventScope {
+            while (true) {
+                val event = awaitPointerEvent()
+                if (event.changes.any { it.pressed && !it.previousPressed }) {
+                    Log.i(EDGE_TAG, "$label edge strip took a touch the map will not see")
+                }
+                event.changes.forEach { it.consume() }
+            }
+        }
+    })
+}
+
+/** Compose's back gesture starts here; Apple's screen-edge region is undocumented but is about
+ *  20pt in practice. */
+private val EDGE_INSET_LEFT = 20.dp
+
+/** Only used if the platform reports no bottom safe-area inset. The home indicator is about 34pt
+ *  tall on an iPhone that has one. */
+private val EDGE_INSET_BOTTOM_FALLBACK = 34.dp
+
+/** So it can be confirmed from a device that a strip is taking the touch, rather than inferred. */
+private const val EDGE_TAG = "Gestures"
 
 /** How much of the map the user's finger covers, as on Android (MainMapFragment) */
 private val CLICK_AREA_SIZE = 28.dp
