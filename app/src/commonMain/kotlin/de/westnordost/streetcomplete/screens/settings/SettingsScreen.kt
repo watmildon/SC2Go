@@ -69,6 +69,7 @@ fun SettingsScreen(
     val autosync by viewModel.autosync.collectAsState()
     val theme by viewModel.theme.collectAsState()
     val keepScreenOn by viewModel.keepScreenOn.collectAsState()
+    val reducePowerUse by viewModel.reducePowerUse.collectAsState()
     val showZoomButtons by viewModel.showZoomButtons.collectAsState()
     val selectedLanguage by viewModel.selectedLanguage.collectAsState()
 
@@ -214,6 +215,14 @@ fun SettingsScreen(
                     onClick = { viewModel.setKeepScreenOn(!keepScreenOn) },
                 ) {
                     Switch(checked = keepScreenOn, onCheckedChange = null)
+                }
+
+                Preference(
+                    name = stringResource(Res.string.pref_title_reduce_power_use),
+                    onClick = { viewModel.setReducePowerUse(!reducePowerUse) },
+                    description = stringResource(Res.string.pref_summary_reduce_power_use),
+                ) {
+                    Switch(checked = reducePowerUse, onCheckedChange = null)
                 }
             }
 

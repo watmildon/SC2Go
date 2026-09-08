@@ -21,6 +21,8 @@ import de.westnordost.streetcomplete.data.maptiles.MapTilesDownloaderAndroid
 import de.westnordost.streetcomplete.data.osm.edits.upload.changesets.AndroidChangesetAutoCloser
 import de.westnordost.streetcomplete.data.osm.edits.upload.changesets.ChangesetAutoCloser
 import de.westnordost.streetcomplete.data.osm.edits.upload.changesets.ChangesetAutoCloserWorker
+import de.westnordost.streetcomplete.data.power.AndroidPowerSaveSource
+import de.westnordost.streetcomplete.data.power.PowerSaveSource
 import de.westnordost.streetcomplete.data.upload.AndroidUploadController
 import de.westnordost.streetcomplete.data.upload.UploadController
 import de.westnordost.streetcomplete.data.upload.UploadWorker
@@ -110,6 +112,11 @@ val androidModule = module {
     // connection availability
 
     factory<ActiveNetworkConnection> { AndroidActiveNetworkConnection(androidContext()) }
+
+    // power
+
+    // a single: it registers a process-lifetime receiver, see the class
+    single<PowerSaveSource> { AndroidPowerSaveSource(androidContext()) }
 
     // background jobs
 

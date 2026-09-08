@@ -18,6 +18,8 @@ import de.westnordost.streetcomplete.data.maptiles.MapTilesDownloader
 import de.westnordost.streetcomplete.data.osm.edits.upload.changesets.ChangesetAutoCloser
 import de.westnordost.streetcomplete.data.osm.edits.upload.changesets.IosChangesetAutoCloser
 import de.westnordost.streetcomplete.data.osm.edits.upload.changesets.OpenChangesetsManager
+import de.westnordost.streetcomplete.data.power.IosPowerSaveSource
+import de.westnordost.streetcomplete.data.power.PowerSaveSource
 import de.westnordost.streetcomplete.data.upload.IosUploadController
 import de.westnordost.streetcomplete.data.upload.UploadController
 import de.westnordost.streetcomplete.data.upload.Uploader
@@ -126,6 +128,11 @@ val iosModule = module {
     // connection
 
     factory<ActiveNetworkConnection> { IosActiveNetworkConnection() }
+
+    // power
+
+    // a single: it registers a process-lifetime observer, see the class
+    single<PowerSaveSource> { IosPowerSaveSource() }
 
     // map tiles
 

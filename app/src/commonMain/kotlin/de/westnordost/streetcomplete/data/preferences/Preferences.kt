@@ -40,6 +40,10 @@ class Preferences(private val prefs: ObservableSettings) {
 
     var showZoomButtons: Boolean by prefs.boolean(SHOW_ZOOM_BUTTONS, false)
 
+    /** The user's half of [de.westnordost.streetcomplete.data.power.LowPowerMode]; the other half
+     *  is the system's low-power mode, which is followed whether or not this is set */
+    var reducePowerUse: Boolean by prefs.boolean(REDUCE_POWER_USE, false)
+
     var resurveyIntervals: ResurveyIntervals
         set(value) { prefs.putString(RESURVEY_INTERVALS, value.name) }
         get() = prefs.getStringOrNull(RESURVEY_INTERVALS)?.let { ResurveyIntervals.valueOf(it) }
@@ -73,6 +77,9 @@ class Preferences(private val prefs: ObservableSettings) {
 
     fun onShowZoomButtonsChanged(callback: (Boolean) -> Unit): SettingsListener =
         prefs.addBooleanListener(SHOW_ZOOM_BUTTONS, false, callback)
+
+    fun onReducePowerUseChanged(callback: (Boolean) -> Unit): SettingsListener =
+        prefs.addBooleanListener(REDUCE_POWER_USE, false, callback)
 
     // login and user
     var userId: Long by prefs.long(OSM_USER_ID, -1)
@@ -239,6 +246,7 @@ class Preferences(private val prefs: ObservableSettings) {
         private const val AUTOSYNC = "autosync"
         private const val KEEP_SCREEN_ON = "display.keepScreenOn"
         private const val SHOW_ZOOM_BUTTONS = "display.zoomButtons"
+        private const val REDUCE_POWER_USE = "power.reduce"
         private const val THEME_SELECT = "theme.select"
         private const val LANGUAGE_SELECT = "language.select"
         private const val RESURVEY_INTERVALS = "quests.resurveyIntervals"

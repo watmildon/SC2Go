@@ -100,6 +100,7 @@ import de.westnordost.streetcomplete.data.osmtracks.TracksSerializer
 import de.westnordost.streetcomplete.data.overlays.OverlayRegistry
 import de.westnordost.streetcomplete.data.overlays.SelectedOverlayController
 import de.westnordost.streetcomplete.data.overlays.SelectedOverlaySource
+import de.westnordost.streetcomplete.data.power.LowPowerMode
 import de.westnordost.streetcomplete.data.preferences.Preferences
 import de.westnordost.streetcomplete.data.preferences.ResurveyIntervalsUpdater
 import de.westnordost.streetcomplete.data.presets.EditTypePresetsController
@@ -471,6 +472,8 @@ val commonModule = module {
     }
 
     single { SurveyChecker() }
+
+    single { LowPowerMode(get(), get()) }
 
     //endregion
 

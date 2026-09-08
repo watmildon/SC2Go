@@ -29,6 +29,7 @@ import de.westnordost.streetcomplete.data.edithistory.EditKey
 import de.westnordost.streetcomplete.data.location.Location
 import de.westnordost.streetcomplete.data.osm.mapdata.ElementKey
 import de.westnordost.streetcomplete.data.osm.mapdata.LatLon
+import de.westnordost.streetcomplete.data.power.LowPowerMode
 import de.westnordost.streetcomplete.data.quest.QuestKey
 import de.westnordost.streetcomplete.data.quest.QuestTypeRegistry
 import de.westnordost.streetcomplete.resources.Res
@@ -62,7 +63,9 @@ import org.maplibre.compose.camera.CameraState
 import org.maplibre.compose.camera.rememberCameraState
 import org.maplibre.compose.expressions.ast.Expression
 import org.maplibre.compose.expressions.value.ImageValue
+import org.maplibre.compose.map.MapOptions
 import org.maplibre.compose.map.MaplibreMap
+import org.maplibre.compose.map.RenderOptions
 import org.maplibre.compose.overlay.MapOverlay
 import org.maplibre.compose.sources.GeoJsonData
 import org.maplibre.compose.sources.rememberGeoJsonSource
@@ -228,12 +231,25 @@ fun MainMap(
     }.takeIf { it > 0.dp } ?: EDGE_INSET_BOTTOM_FALLBACK
     LaunchedEffect(bottomEdgeInset) { Log.i(EDGE_TAG, "bottom edge strip = $bottomEdgeInset") }
 
+    /* The frame-rate cap. The launch flag is the A/B harness and wins; without one, the low-power
+       mode caps at 30 (measured -77% while panning, i.e. while following: LOW_POWER_PLAN.md C2).
+       MapPerf.maxFps is deliberately a plain var and not a State: it is set once at launch, before
+       this composes, and never changes. The mode does change at runtime, which is safe: the surface
+       applies the cap in a SideEffect on both platforms. */
+    val lowPowerMode: LowPowerMode = koinInject()
+    val lowPower by lowPowerMode.isActive.collectAsState()
+
     Box(modifier) {
         MaplibreMap(
             modifier = Modifier.fillMaxSize(),
             baseStyle = BaseStyle.Json(BASE_STYLE),
             zoomRange = 0f..22f,
             cameraState = cameraState,
+            options = remember(lowPower) {
+                (MapPerf.maxFps ?: LOW_POWER_MAX_FPS.takeIf { lowPower })
+                    ?.let { MapOptions(renderOptions = RenderOptions.Standard.copy(maximumFps = it)) }
+                    ?: MapOptions()
+            },
             // StreetComplete draws its own attribution
             overlay = MapOverlay.None,
             styleState = styleState,
@@ -425,6 +441,9 @@ private const val EDGE_TAG = "Gestures"
 
 /** How much of the map the user's finger covers, as on Android (MainMapFragment) */
 private val CLICK_AREA_SIZE = 28.dp
+
+/** The map's frame-rate cap while the low-power mode is on, unless a `-maxfps` flag was given */
+private const val LOW_POWER_MAX_FPS = 30
 
 /** Every layer that handles clicks itself, so that a click on one of them does not also count as
  *  a click on the map. Kept next to the layers that define them so the two cannot drift apart. */
