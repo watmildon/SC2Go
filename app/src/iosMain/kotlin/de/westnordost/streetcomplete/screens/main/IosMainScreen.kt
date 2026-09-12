@@ -571,7 +571,7 @@ fun IosMainScreen() {
             isShowingUndoHistorySidebar = isShowingUndoHistory,
             trackpoints = trackPositions,
             oldTrackpointsLists = oldTrackPositions,
-            isRecordingTracks = isRecordingTracks,
+            isRecording = isRecordingTracks,
             isOnScreen = shownScreen == null,
             onMapLongClick = { position, offset ->
                 /* not while a form or the edit history is open, as MainActivity.onLongPress also

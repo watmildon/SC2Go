@@ -25,9 +25,9 @@ import de.westnordost.streetcomplete.data.osm.edits.split_way.SplitWayAction
 import de.westnordost.streetcomplete.data.osm.edits.update_tags.RevertUpdateElementTagsAction
 import de.westnordost.streetcomplete.data.osm.edits.update_tags.UpdateElementTagsAction
 import de.westnordost.streetcomplete.util.Mockable
+import kotlinx.serialization.PolymorphicSerializer
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
-import kotlinx.serialization.PolymorphicSerializer
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.modules.SerializersModule
 import kotlinx.serialization.modules.polymorphic
@@ -38,10 +38,6 @@ class ElementEditsDao(
     private val db: Database,
     private val allEditTypes: AllEditTypes,
 ) {
-    /* the serializer has to be named explicitly: ElementEditAction is an interface, so
-       resolving it from the type alone needs reflection, which does not exist on Kotlin/Native */
-    private val elementEditActionSerializer = PolymorphicSerializer(ElementEditAction::class)
-
     private val json = Json {
         serializersModule = SerializersModule {
             polymorphic(ElementEditAction::class) {
@@ -109,7 +105,7 @@ class ElementEditsDao(
         LONGITUDE to position.longitude,
         CREATED_TIMESTAMP to createdTimestamp,
         IS_SYNCED to if (isSynced) 1 else 0,
-        ACTION to json.encodeToString(elementEditActionSerializer, action),
+        ACTION to json.encodeToString(PolymorphicSerializer(ElementEditAction::class), action),
         IS_NEAR_USER_LOCATION to if (isNearUserLocation) 1 else 0
     )
 
@@ -120,7 +116,7 @@ class ElementEditsDao(
         getString(SOURCE),
         getLong(CREATED_TIMESTAMP),
         getInt(IS_SYNCED) == 1,
-        json.decodeFromString(elementEditActionSerializer, getString(ACTION)),
+        json.decodeFromString(PolymorphicSerializer(ElementEditAction::class), getString(ACTION)),
         getInt(IS_NEAR_USER_LOCATION) == 1,
     )
 }

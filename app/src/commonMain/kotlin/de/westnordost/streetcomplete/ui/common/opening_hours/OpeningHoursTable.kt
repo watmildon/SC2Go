@@ -22,8 +22,8 @@ fun OpeningHoursTable(
     countryInfo: CountryInfo,
     addButtonContent: @Composable (RowScope.() -> Unit),
     modifier: Modifier = Modifier,
-    locale: Locale = Locale.current,
-    userLocale: Locale = Locale.current,
+    countryLocale: Locale? = null,
+    userLocale: Locale? = null,
     enabled: Boolean = true,
 ) {
     val workweek = remember(countryInfo) {
@@ -37,7 +37,7 @@ fun OpeningHoursTable(
         MonthsColumn(
             monthsList = openingHours.monthsList,
             onChange = { onChange(HierarchicOpeningHours(it)) },
-            locale = locale,
+            countryLocale = countryLocale,
             userLocale = userLocale,
             enabled = enabled,
         )
@@ -48,7 +48,7 @@ fun OpeningHoursTable(
                 onChange = onChange,
                 timeMode = timeMode,
                 workweek = workweek,
-                locale = locale,
+                countryLocale = countryLocale,
                 userLocale = userLocale,
                 content = addButtonContent,
             )

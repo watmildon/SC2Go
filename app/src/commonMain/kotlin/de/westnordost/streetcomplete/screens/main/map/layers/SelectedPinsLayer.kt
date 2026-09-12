@@ -5,15 +5,20 @@ import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
 import de.westnordost.streetcomplete.data.osm.mapdata.LatLon
 import de.westnordost.streetcomplete.screens.main.map.toGeometry
+import de.westnordost.streetcomplete.screens.main.map.pinPainter
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import kotlinx.serialization.json.JsonObject
 import org.maplibre.spatialk.geojson.Feature
 import org.maplibre.spatialk.geojson.FeatureCollection
-import kotlinx.serialization.json.JsonObject
-import de.westnordost.streetcomplete.screens.main.map.pinPainter
+import org.maplibre.spatialk.geojson.Geometry
 import org.jetbrains.compose.resources.DrawableResource
 import org.jetbrains.compose.resources.painterResource
 import org.maplibre.compose.expressions.dsl.const
@@ -25,7 +30,10 @@ import org.maplibre.compose.util.DpPadding
 import org.maplibre.compose.util.MaplibreComposable
 
 /** Displays "selected" pins. Those pins should always be shown on top of pins displayed by
- *  [PinsLayers] */
+ *  [PinsLayers].
+ *
+ *  When they are shown, a short springy animation animate them to a larger size.
+ *  */
 @MaplibreComposable
 @Composable
 fun SelectedPinsLayer(icon: DrawableResource, pinPositions: Collection<LatLon>) {
@@ -40,13 +48,25 @@ fun SelectedPinsLayer(icon: DrawableResource, pinPositions: Collection<LatLon>) 
         )
     }
 
+    /* Keyed on the positions, unlike upstream: produceState without a key runs its producer
+       exactly once, so the first selection would be the only one ever drawn.
+
+       No "icon-image" property: the layer below names the painter directly rather than looking an
+       image up by name, which is what maplibre-compose#468 forces. The properties must still be a
+       JsonObject and not just any Map, or serializing the source throws. */
+    val features by produceState<List<Feature<Geometry, JsonObject>>>(emptyList(), pinPositions) {
+        value = withContext(Dispatchers.Default) {
+            pinPositions.map {
+                Feature<Geometry, JsonObject>(
+                    geometry = it.toGeometry(),
+                    properties = JsonObject(emptyMap())
+                )
+            }
+        }
+    }
+
     val source = rememberGeoJsonSource(
-        data = GeoJsonData.Features(
-            FeatureCollection(pinPositions.map {
-                // must be a JsonObject and not just any Map, or serializing the source throws
-                Feature(geometry = it.toGeometry(), properties = JsonObject(emptyMap()))
-            })
-        ),
+        data = GeoJsonData.Features(FeatureCollection(features)),
     )
 
     SymbolLayer(

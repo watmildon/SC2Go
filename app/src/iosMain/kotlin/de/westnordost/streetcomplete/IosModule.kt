@@ -6,6 +6,8 @@ import com.russhwolf.settings.ObservableSettings
 import de.westnordost.osmfeatures.FeatureDictionary
 import de.westnordost.streetcomplete.data.Database
 import de.westnordost.streetcomplete.data.DatabaseImpl
+import de.westnordost.streetcomplete.data.IosPeriodicCleaner
+import de.westnordost.streetcomplete.data.PeriodicCleaner
 import de.westnordost.streetcomplete.data.StreetCompleteDatabaseConfigurator
 import de.westnordost.streetcomplete.data.connection.ActiveNetworkConnection
 import de.westnordost.streetcomplete.data.connection.IosActiveNetworkConnection
@@ -37,6 +39,7 @@ import kotlinx.io.files.Path
 import kotlinx.io.files.SystemFileSystem
 import org.koin.core.qualifier.named
 import org.koin.dsl.module
+import org.koin.dsl.onClose
 import org.maplibre.compose.location.IosLocationProvider
 import org.maplibre.compose.location.IosSystemSettingsLauncher
 import org.maplibre.compose.location.LocationProvider
@@ -88,7 +91,7 @@ val iosModule = module {
         val databaseFilePath = databaseUrl.path!!
         val databaseConnection = BundledSQLiteDriver().open(databaseFilePath)
         DatabaseImpl(databaseConnection).apply { initialize(StreetCompleteDatabaseConfigurator) }
-    }
+    } onClose { it?.close() }
 
     // avatars cache dir
 
@@ -144,5 +147,9 @@ val iosModule = module {
 
     single<DownloadController> { IosDownloadController({ get<Downloader>() }) }
 
+    /* a single, and constructed with the manager provided lazily: our IosChangesetAutoCloser keeps
+       a scope and a pending job of its own, unlike upstream's TODO() stub */
     single<ChangesetAutoCloser> { IosChangesetAutoCloser({ get<OpenChangesetsManager>() }) }
+
+    factory<PeriodicCleaner> { IosPeriodicCleaner() }
 }

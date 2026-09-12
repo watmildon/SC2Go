@@ -14,6 +14,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
@@ -31,7 +32,6 @@ import de.westnordost.streetcomplete.data.osm.mapdata.ElementKey
 import de.westnordost.streetcomplete.data.osm.mapdata.LatLon
 import de.westnordost.streetcomplete.data.power.LowPowerMode
 import de.westnordost.streetcomplete.data.quest.QuestKey
-import de.westnordost.streetcomplete.data.quest.QuestTypeRegistry
 import de.westnordost.streetcomplete.resources.Res
 import de.westnordost.streetcomplete.resources.quest_create_note
 import de.westnordost.streetcomplete.resources.quest_notes
@@ -51,14 +51,15 @@ import de.westnordost.streetcomplete.screens.main.map.layers.StyleableOverlayLay
 import de.westnordost.streetcomplete.screens.main.map.layers.StyleableOverlaySideLayer
 import de.westnordost.streetcomplete.screens.main.map.layers.TracksLayers
 import de.westnordost.streetcomplete.screens.main.map.layers.overlayIcons
-import de.westnordost.streetcomplete.screens.main.map.layers.pinFeatures
 import de.westnordost.streetcomplete.screens.main.map.layers.toGeoJsonFeatures
 import de.westnordost.streetcomplete.util.logs.Log
 import de.westnordost.streetcomplete.util.math.distanceTo
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import kotlinx.serialization.json.JsonObject
 import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
-import org.maplibre.compose.camera.CameraPosition
 import org.maplibre.compose.camera.CameraState
 import org.maplibre.compose.camera.rememberCameraState
 import org.maplibre.compose.expressions.ast.Expression
@@ -74,6 +75,7 @@ import org.maplibre.compose.style.StyleState
 import org.maplibre.compose.style.rememberStyleState
 import org.maplibre.compose.util.ClickResult
 import org.maplibre.compose.util.MapClickHandler
+import org.maplibre.spatialk.geojson.Feature
 import org.maplibre.spatialk.geojson.FeatureCollection
 import org.maplibre.spatialk.geojson.Geometry
 import org.maplibre.spatialk.geojson.Position
@@ -103,7 +105,7 @@ import org.maplibre.spatialk.geojson.Position
  *
  * @param trackpoints where the user has been since the last break in reception, and
  * [oldTrackpointsLists] the stretches before that. Drawn so the user can see where they have
- * already been. [isRecordingTracks] draws the current one differently, as it is being recorded to
+ * already been. [isRecording] draws the current one differently, as it is being recorded to
  * attach to a note.
  * */
 @Composable
@@ -112,13 +114,15 @@ fun MainMap(
     onClickQuest: (QuestKey) -> Unit,
     onClickEdit: (EditKey) -> Unit,
     location: Location?,
+    /* a lambda, not a value: it is handed on unread to CurrentLocationLayers, which reads it
+       inside itself. See the comment there. */
     rotation: () -> Float?,
+    isRecording: Boolean,
+    trackpoints: List<LatLon>,
+    oldTrackpointsLists: List<List<LatLon>>,
     shownBottomSheet: ShownBottomSheet?,
     shownMarkers: Collection<Marker>?,
     isShowingUndoHistorySidebar: Boolean,
-    trackpoints: List<LatLon>,
-    oldTrackpointsLists: List<List<LatLon>>,
-    isRecordingTracks: Boolean,
     modifier: Modifier = Modifier,
     onClickMap: (position: LatLon, clickAreaSizeInMeters: Double) -> Unit = { _, _ -> },
     onMapLongClick: MapClickHandler = { _, _ -> ClickResult.Pass },
@@ -133,12 +137,6 @@ fun MainMap(
     val editHistoryPins by viewModel.editHistoryPins.collectAsState()
     val styledElements by viewModel.styleableElements.collectAsState()
     val questPins by viewModel.questPins.collectAsState()
-
-    /* Turning pins into GeoJSON is linear in the number of pins and was being done during
-       composition, on the main thread, every time the pins changed - tens of milliseconds with a
-       few thousand pins in view. Nothing about it needs the main thread. */
-    val questFeatures = pinFeatures(questPins)
-    val editHistoryFeatures = pinFeatures(editHistoryPins)
 
     // because quests highlight additional information and history sidebar should feel clean
     val showOverlay = shownBottomSheet !is ShownBottomSheet.OsmQuest &&
@@ -168,7 +166,7 @@ fun MainMap(
     }
 
     LaunchedEffect(cameraState.position) {
-        viewModel.onMapMoved(cameraState)
+        viewModel.onViewportChanged(cameraState)
     }
 
     /* The map stays composed behind the screens drawn on top of it, so that coming back to it does
@@ -261,8 +259,18 @@ fun MainMap(
 
             val overlayIcons = remember(styledElements) { styledElements.overlayIcons() }
 
+            /* Off the main thread, as upstream does it - but keyed on the elements:
+               produceState without a key runs its producer exactly once, and the overlay would
+               then be stuck with whatever was in view at the first composition. */
+            val overlayData by produceState<List<Feature<Geometry, JsonObject>>>(
+                emptyList(), styledElements
+            ) {
+                value = withContext(Dispatchers.Default) {
+                    styledElements.flatMap { it.toGeoJsonFeatures() }
+                }
+            }
             val overlaySource = rememberGeoJsonSource(
-                GeoJsonData.Features(FeatureCollection(styledElements.flatMap { it.toGeoJsonFeatures() })),
+                data = GeoJsonData.Features(FeatureCollection(overlayData)),
             )
 
             MapStyle(
@@ -297,7 +305,7 @@ fun MainMap(
                             }
                         )
                     }
-                    TracksLayers(trackpoints, isRecordingTracks, oldTrackpointsLists)
+                    TracksLayers(trackpoints, isRecording, oldTrackpointsLists)
                 },
                 aboveLabelsContent = {
                     // these are always on top of everything else (including labels)
@@ -355,7 +363,6 @@ fun MainMap(
                             },
                             onZoomToCluster = ::zoomToCluster,
                             iconImage = iconImage,
-                            prebuiltFeatures = editHistoryFeatures,
                         )
                     } else {
                         /* hidden rather than removed: leaving the composition would throw away the
@@ -370,7 +377,6 @@ fun MainMap(
                             onZoomToCluster = ::zoomToCluster,
                             visible = showQuestPins,
                             iconImage = iconImage,
-                            prebuiltFeatures = questFeatures,
                         )
                     }
 
@@ -402,6 +408,7 @@ internal val BASE_STYLE = """
       "sources": {},
       "glyphs": "${
         Res.getUri("files/glyphs/Roboto Regular/0-255.pbf")
+            .replace("Roboto%20Regular", "{fontstack}")
             .replace("Roboto Regular", "{fontstack}")
             .replace("0-255", "{range}")
             // workaround for https://github.com/maplibre/maplibre-native/issues/4498

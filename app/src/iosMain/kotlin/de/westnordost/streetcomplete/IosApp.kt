@@ -17,19 +17,25 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import de.westnordost.streetcomplete.screens.about.AboutNavHost
 import de.westnordost.streetcomplete.screens.about.ChangelogScreen
 import de.westnordost.streetcomplete.screens.about.CreditsScreen
 import de.westnordost.streetcomplete.screens.about.PrivacyStatementScreen
 import de.westnordost.streetcomplete.screens.main.IosMainScreen
 import de.westnordost.streetcomplete.screens.main.map.MapPerf
+import de.westnordost.streetcomplete.screens.settings.SettingsNavHost
 import de.westnordost.streetcomplete.screens.settings.debug.MapPerfScreen
 import de.westnordost.streetcomplete.screens.settings.debug.ShowMapScreen
 import de.westnordost.streetcomplete.screens.settings.language_selection.LanguageSelectionScreen
+import de.westnordost.streetcomplete.screens.tutorial.IntroTutorialScreen
+import de.westnordost.streetcomplete.screens.tutorial.OverlaysTutorialScreen
+import de.westnordost.streetcomplete.screens.user.UserNavHost
 import org.koin.compose.viewmodel.koinViewModel
 import platform.Foundation.NSUserDefaults
 
 private enum class Screen {
-    Changelog, Credits, PrivacyStatement, LanguageSelection, ShowMap, MapPerf, Main
+    Changelog, Credits, PrivacyStatement, About, Settings, User, IntroTutorial, OverlaysTutorial,
+    LanguageSelection, ShowMap, MapPerf, Main
 }
 
 private val ScreenSaver = Saver<Screen?, String>(
@@ -69,9 +75,6 @@ fun IosApp() {
         if (defaults.objectForKey("hoisticons") != null) {
             MapPerf.hoistIconExpression = defaults.boolForKey("hoisticons")
         }
-        if (defaults.objectForKey("offthreadgeojson") != null) {
-            MapPerf.offThreadGeoJson = defaults.boolForKey("offthreadgeojson")
-        }
         /* Knobs for the battery experiments, driven from the command line so that one binary can
            be measured in several configurations - the discipline MAP_PIN_PERF.md established, so
            that no difference between arms is a build difference. */
@@ -104,6 +107,24 @@ fun IosApp() {
             )
             Screen.PrivacyStatement -> PrivacyStatementScreen(
                 onClickBack = { screen = null },
+            )
+            Screen.About -> AboutNavHost(
+                onClickBack = { screen = null },
+            )
+            Screen.Settings -> SettingsNavHost(
+                onClickBack = { screen = null },
+            )
+            Screen.User -> UserNavHost(
+                launchAuth = false,
+                onClickBack = { screen = null },
+            )
+            Screen.IntroTutorial -> IntroTutorialScreen(
+                onDismissRequest = { screen = null },
+                onFinished = { screen = null }
+            )
+            Screen.OverlaysTutorial -> OverlaysTutorialScreen(
+                onDismissRequest = { screen = null },
+                onFinished = { screen = null }
             )
             Screen.LanguageSelection -> LanguageSelectionScreen(
                 viewModel = koinViewModel(),

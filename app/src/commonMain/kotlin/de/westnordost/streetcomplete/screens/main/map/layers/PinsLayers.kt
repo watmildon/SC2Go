@@ -1,10 +1,10 @@
 package de.westnordost.streetcomplete.screens.main.map.layers
 
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.key
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
@@ -13,42 +13,31 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
-import de.westnordost.streetcomplete.data.osm.mapdata.LatLon
 import de.westnordost.streetcomplete.resources.Res
 import de.westnordost.streetcomplete.resources.map_pin_circle
 import de.westnordost.streetcomplete.resources.quest_create_note
 import de.westnordost.streetcomplete.screens.main.map.MapPerf
 import de.westnordost.streetcomplete.screens.main.map.pinPainter
-import de.westnordost.streetcomplete.screens.main.map.toGeometry
 import de.westnordost.streetcomplete.ui.ktx.id
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.JsonObject
-import org.maplibre.spatialk.geojson.Feature
-import org.maplibre.spatialk.geojson.FeatureCollection
-import kotlinx.serialization.json.JsonPrimitive
 import org.jetbrains.compose.resources.DrawableResource
 import org.jetbrains.compose.resources.painterResource
-import org.maplibre.compose.expressions.dsl.all
-import org.maplibre.compose.expressions.dsl.any
+import org.maplibre.compose.expressions.ast.Expression
 import org.maplibre.compose.expressions.dsl.case
 import org.maplibre.compose.expressions.dsl.const
 import org.maplibre.compose.expressions.dsl.convertToNumber
 import org.maplibre.compose.expressions.dsl.convertToString
 import org.maplibre.compose.expressions.dsl.div
 import org.maplibre.compose.expressions.dsl.feature
-import org.maplibre.compose.expressions.dsl.gt
-import org.maplibre.compose.expressions.dsl.gte
 import org.maplibre.compose.expressions.dsl.image
 import org.maplibre.compose.expressions.dsl.log2
-import org.maplibre.compose.expressions.dsl.lte
 import org.maplibre.compose.expressions.dsl.offset
 import org.maplibre.compose.expressions.dsl.plus
 import org.maplibre.compose.expressions.dsl.sp
 import org.maplibre.compose.expressions.dsl.switch
-import org.maplibre.compose.expressions.dsl.zoom
-import org.maplibre.compose.expressions.ast.Expression
 import org.maplibre.compose.expressions.value.ImageValue
 import org.maplibre.compose.expressions.value.TranslateAnchor
 import org.maplibre.compose.layers.CircleLayer
@@ -57,8 +46,12 @@ import org.maplibre.compose.sources.GeoJsonData
 import org.maplibre.compose.sources.GeoJsonOptions
 import org.maplibre.compose.sources.rememberGeoJsonSource
 import org.maplibre.compose.util.ClickResult
+import org.maplibre.compose.util.DpPadding
 import org.maplibre.compose.util.MaplibreComposable
+import org.maplibre.spatialk.geojson.Feature
+import org.maplibre.spatialk.geojson.FeatureCollection
 import org.maplibre.spatialk.geojson.Geometry
+import org.maplibre.spatialk.geojson.Point
 
 /** Display pins on the map, e.g. quest pins or pins for recent edits */
 @MaplibreComposable
@@ -72,8 +65,6 @@ fun PinsLayers(
      *  in view. When null this falls back to building it per icon set, which is what it used to do
      *  and what the measurement compares against. */
     iconImage: Expression<ImageValue>? = null,
-    /** Built off the main thread from the same pins. When null it is built here instead. */
-    prebuiltFeatures: FeatureCollection<Geometry, JsonObject?>? = null,
 ) {
     val coroutineScope = rememberCoroutineScope()
 
@@ -139,20 +130,36 @@ fun PinsLayers(
     }
     val effectiveIconImage = iconImage ?: localIconImage
 
-    val features = prebuiltFeatures ?: run {
-        val featuresMark = MapPerf.mark()
-        val built = FeatureCollection(pins.map { it.toGeoJsonFeature() })
-        MapPerf.logSince(featuresMark) { "build ${pins.size} GeoJSON features" }
-        built
+    /* Turning a pin into a feature allocates a JsonObject each, so it is linear in the number of
+       pins and was costing tens of milliseconds during composition with a few thousand of them in
+       view. None of it needs the main thread.
+
+       The result arrives a frame after the pins do, which is the price: the map draws the previous
+       set for one more frame rather than blocking to catch up.
+
+       Keyed on the pins: produceState without a key runs its producer exactly once, for the pins
+       that happened to be there at the first composition, and the map would then never show
+       another. */
+    val features by produceState<List<Feature<Point, JsonObject>>>(emptyList(), pins) {
+        value = withContext(Dispatchers.Default) {
+            val mark = MapPerf.mark()
+            val built = pins.map { it.toGeoJsonFeature() }
+            MapPerf.logSince(mark) { "OFF-THREAD build ${pins.size} GeoJSON features" }
+            built
+        }
+    }
+
+    val options = remember {
+        GeoJsonOptions(
+            cluster = true,
+            clusterMaxZoom = CLUSTER_MAX_ZOOM,
+            clusterRadius = 55,
+        )
     }
 
     val source = rememberGeoJsonSource(
-        data = GeoJsonData.Features(features),
-        options = GeoJsonOptions(
-            cluster = true,
-            clusterMaxZoom = CLUSTER_MAX_ZOOM,
-            clusterRadius = 55
-        )
+        data = GeoJsonData.Features(FeatureCollection(features)),
+        options = options
     )
 
     fun onClickCluster(features: List<Feature<Geometry, JsonObject?>>): ClickResult {
@@ -175,17 +182,12 @@ fun PinsLayers(
         visible = visible,
         minZoom = CLUSTER_MIN_ZOOM.toFloat(),
         maxZoom = CLUSTER_MAX_ZOOM.toFloat(),
-        filter = all(
-            zoom() gte const(CLUSTER_MIN_ZOOM),
-            zoom() lte const(CLUSTER_MAX_ZOOM),
-            feature["point_count"].convertToNumber() gt const(1)
-        ),
         iconImage = image(painterResource(Res.drawable.map_pin_circle)),
         iconSize = const(0.5f) + (log2(feature["point_count"].convertToNumber()) / const(10f)),
         iconAllowOverlap = const(true),
         iconIgnorePlacement = const(true),
         textField = feature["point_count"].convertToString(),
-        textSize = (const(15f) + (log2(feature["point_count"].convertToNumber()) / const(1.5f))).sp,
+        textSize = (const(15f) + log2(feature["point_count"].convertToNumber()) / const(1.5f)).sp,
         textFont = const(listOf("Roboto Regular")),
         textOffset = offset(0.em, 0.1.em),
         textAllowOverlap = const(true),
@@ -196,14 +198,7 @@ fun PinsLayers(
         id = "pin-dot-layer",
         source = source,
         visible = visible,
-        minZoom = CLUSTER_MIN_ZOOM.toFloat(),
-        filter = any(
-            zoom() gt const(CLUSTER_MAX_ZOOM),
-            all(
-                zoom() gte const(CLUSTER_MIN_ZOOM),
-                feature["point_count"].convertToNumber() lte const(1)
-            )
-        ),
+        minZoom = CLUSTER_MAX_ZOOM.toFloat(),
         color = const(Color.White),
         radius = const(5.dp),
         strokeColor = const(Color(0xffaaaaaa)),
@@ -216,7 +211,6 @@ fun PinsLayers(
         source = source,
         visible = visible,
         minZoom = CLUSTER_MAX_ZOOM.toFloat(),
-        filter = zoom() gt const(CLUSTER_MAX_ZOOM),
         sortKey = feature["icon-order"].convertToNumber(),
         /* Ideally this would just be image(feature["icon-image"]), i.e. refer to the pin image by
            name. That only works for images already defined in the style JSON, though, and
@@ -229,14 +223,12 @@ fun PinsLayers(
         // importantly, dynamic size per zoom + collision doesn't work together well, it
         // results in a lot of flickering.
         iconSize = const(1f),
-        /* TODO maplibre-compose: negative paddings not allowed
-           https://github.com/maplibre/maplibre-compose/issues/1091
-        iconPadding = const(PaddingValues.Absolute(
+        iconPadding = const(DpPadding(
             left = 2.5.dp,
             top = -2.5.dp,
             right = 0.dp,
             bottom = -7.dp,
-        )),*/
+        )),
         iconOffset = const(DpOffset((-4.5).dp, (-34.5).dp)),
         iconAllowOverlap = const(false),
         iconIgnorePlacement = const(false),
@@ -252,27 +244,6 @@ val PINS_CLICKABLE_LAYERS = setOf(PIN_CLUSTER_LAYER, PINS_LAYER)
 
 private const val CLUSTER_MIN_ZOOM = 13
 private const val CLUSTER_MAX_ZOOM = 14
-
-data class Pin(
-    val position: LatLon,
-    val icon: DrawableResource,
-    val properties: JsonObject? = null,
-    val order: Int = 0
-)
-
-fun Pin.toGeoJsonFeature() =
-    Feature(
-        geometry = position.toGeometry(),
-        /* must be a JsonObject and not just any Map: the GeoJSON serializer looks up the
-           serializer by the runtime class, and a plain Map has none registered */
-        properties = JsonObject(
-            mapOf(
-                "icon-image" to JsonPrimitive("pin_" + icon.id),
-                "icon-order" to JsonPrimitive(order + 50),
-            )
-            + (properties ?: emptyMap())
-        )
-    )
 
 /** Resolves every pin icon and builds the icon expression from them, once.
  *
@@ -305,26 +276,4 @@ fun PinIconImage(
     }
     MapPerf.logSince(mark) { "HOIST: resolve+build for ${icons.size} icons" }
     SideEffect { output.value = expression }
-}
-
-/** The pins as GeoJSON, built off the main thread.
- *
- *  Turning a pin into a feature allocates a JsonObject each, so it is linear in the number of pins
- *  and was costing tens of milliseconds during composition with a few thousand of them in view.
- *  None of it needs the main thread.
- *
- *  The result arrives a frame after the pins do, which is the price: the map draws the previous set
- *  for one more frame rather than blocking to catch up. Returns null until the first set is ready,
- *  which [PinsLayers] reads as "build it yourself". */
-@Composable
-fun pinFeatures(pins: Collection<Pin>): FeatureCollection<Geometry, JsonObject?>? {
-    if (!MapPerf.offThreadGeoJson) return null
-    return produceState<FeatureCollection<Geometry, JsonObject?>?>(null, pins) {
-        value = withContext(Dispatchers.Default) {
-            val mark = MapPerf.mark()
-            val features = FeatureCollection(pins.map { it.toGeoJsonFeature() })
-            MapPerf.logSince(mark) { "OFF-THREAD build ${pins.size} GeoJSON features" }
-            features
-        }
-    }.value
 }

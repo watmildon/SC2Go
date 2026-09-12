@@ -29,6 +29,8 @@ import org.maplibre.compose.sources.GeoJsonData
 import org.maplibre.compose.sources.rememberGeoJsonSource
 import org.maplibre.compose.util.MaplibreComposable
 
+//TODO maplibre-compose check whether to just replace this with org.maplibre.compose.layers.LocationIndicatorLayer
+//     (the TracksLayer animation needs to be in-sync with the moving of the location indicator)
 /** Displays the location + direction + accuracy marker on the map.
  *
  *  [rotation] is a lambda, read here and nowhere above: the compass behind it reports up to 30
@@ -42,11 +44,13 @@ fun CurrentLocationLayers(
 ) {
     val rotation = rotation()
     val animatedPosition by animateLatLonAsState(targetValue = location.position)
-
     val animatedAccuracy by animateFloatAsState(
         targetValue = location.accuracy,
         animationSpec = spring(stiffness = StiffnessLow),
     )
+
+    // let's not check for the date on every recomposition :-)
+    val isApril1st = remember { isApril1st() }
 
     val source = rememberGeoJsonSource(GeoJsonData.Features(animatedPosition.toGeometry()))
 
@@ -83,9 +87,6 @@ fun CurrentLocationLayers(
         iconIgnorePlacement = const(true),
         iconPitchAlignment = const(IconPitchAlignment.Map),
     )
-
-    // let's not check for the date on every recomposition :-)
-    val isApril1st = remember { isApril1st() }
     if (!isApril1st) {
         CircleLayer(
             id = "location",

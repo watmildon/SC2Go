@@ -44,6 +44,8 @@
     <string name="no_location_permission_warning_title">Location Permission</string>
     <string name="no_location_permission_warning">Precise location permission is needed to show your position on the map and download data in your vicinity.</string>
 
+    <string name="camera_permission_description">Camera permission is needed to attach photos to map notes.</string>
+
     <string name="map_attribution_osm">© OpenStreetMap contributors</string>
     <string name="open_url">Open URL</string>
 
@@ -1763,6 +1765,8 @@
 
     <string name="quest_traffic_signals_vibrate_title">Do these traffic lights have a tactile indication for blind people for when it’s safe to cross?</string>
     <string name="quest_traffic_signals_vibrate_description">Hint: Often this is a vibrating button or rotating cone on the underside of the traffic light button case.</string>
+
+    <string name="quest_vending_machine_type">What type of vending machine is this?</string>
 
     <string name="quest_wheelchairAccess_outside_title">Is this place wheelchair accessible?</string>
     <string name="quest_wheelchairAccess_toiletsPart_title2">Is the restroom at this place wheelchair accessible?</string>

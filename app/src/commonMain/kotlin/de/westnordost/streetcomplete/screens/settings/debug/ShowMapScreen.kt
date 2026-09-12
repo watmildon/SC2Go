@@ -117,8 +117,8 @@ private val TEST_PINS = TEST_PIN_ICONS.mapIndexed { index, icon ->
             longitude = 13.4132 + (index % 4) * 0.0008,
         ),
         icon = icon,
-        // PinsLayers requires non-null properties, it merges them into the GeoJSON feature
-        properties = JsonObject(mapOf("index" to JsonPrimitive(index))),
+        // PinsLayers merges these into the GeoJSON feature's properties
+        properties = listOf("index" to JsonPrimitive(index)),
     )
 }
 

@@ -52,9 +52,6 @@ object MapPerf {
      *  ship it. Kept behind `-hoisticons YES` so the measurement can be repeated. */
     var hoistIconExpression: Boolean = false
 
-    /** Whether the GeoJSON for the pins is built off the main thread. `-offthreadgeojson NO`. */
-    var offThreadGeoJson: Boolean = true
-
     /** Cap the map's frame rate, or null for the platform default. `-maxfps 30`.
      *
      *  The first candidate lever for a low-power mode: MapOptions.maximumFps exists in

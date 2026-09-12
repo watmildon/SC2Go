@@ -16,7 +16,6 @@ object ApplicationConstants {
        edits made from this fork, and vice versa. Renaming the app must not quietly change it. */
     const val QUESTTYPE_TAG_KEY = "StreetComplete:quest_type"
 
-    const val OLD_DATABASE_NAME = "streetcomplete.db"
     const val DATABASE_NAME = "streetcomplete_v2.db"
 
     const val MAX_DOWNLOADABLE_AREA_IN_SQKM = 12.0

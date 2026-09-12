@@ -39,14 +39,12 @@ import de.westnordost.streetcomplete.screens.main.map.layers.PinIconImage
 import de.westnordost.streetcomplete.screens.main.map.Night
 import de.westnordost.streetcomplete.screens.main.map.layers.Pin
 import de.westnordost.streetcomplete.screens.main.map.layers.PinsLayers
-import de.westnordost.streetcomplete.screens.main.map.layers.pinFeatures
 import org.maplibre.compose.expressions.ast.Expression
 import org.maplibre.compose.expressions.value.ImageValue
 import de.westnordost.streetcomplete.screens.main.map.toBoundingBox
 import de.westnordost.streetcomplete.ui.common.BackIcon
 import de.westnordost.streetcomplete.util.logs.Log
 import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import org.jetbrains.compose.resources.DrawableResource
 import org.koin.compose.koinInject
@@ -100,7 +98,6 @@ fun MapPerfScreen(
     )
     var visiblePins by remember { mutableStateOf<List<Pin>>(emptyList()) }
     val hoistedIconImage = remember { mutableStateOf<Expression<ImageValue>?>(null) }
-    val features = pinFeatures(visiblePins)
     var legLabel by remember { mutableStateOf("starting") }
 
     LaunchedEffect(Unit) {
@@ -164,7 +161,6 @@ fun MapPerfScreen(
                             onClickPin = {},
                             onZoomToCluster = {},
                             iconImage = hoistedIconImage.value.takeIf { MapPerf.hoistIconExpression },
-                            prebuiltFeatures = features,
                         )
                     },
                 )
@@ -224,7 +220,7 @@ class FakeQuestData(
                 built.add(Pin(
                     position = LatLon(lat, lon),
                     icon = clusterIcons[random.nextInt(clusterIcons.size)],
-                    properties = JsonObject(mapOf("i" to JsonPrimitive(built.size))),
+                    properties = listOf("i" to JsonPrimitive(built.size)),
                     order = random.nextInt(100),
                 ))
             }
