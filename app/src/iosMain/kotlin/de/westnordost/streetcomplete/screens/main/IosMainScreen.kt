@@ -90,14 +90,15 @@ import org.maplibre.compose.camera.CameraMoveReason
 import org.maplibre.compose.camera.CameraPosition
 import org.maplibre.compose.camera.CameraState
 import org.maplibre.compose.camera.rememberCameraState
+import org.maplibre.compose.location.HeadingRequest
+import org.maplibre.compose.location.IosHeadingProvider
 import org.maplibre.compose.location.LocationEvent
 import org.maplibre.compose.location.LocationUnavailableReason
 import org.maplibre.compose.location.SystemSettingsLauncher
-import org.maplibre.compose.location.rememberDefaultOrientationProvider
 import org.maplibre.compose.util.ClickResult
 import org.maplibre.spatialk.geojson.Position
 import org.maplibre.spatialk.units.Bearing
-import org.maplibre.spatialk.units.DMS
+import org.maplibre.spatialk.units.extensions.inDegrees
 
 /** The real main screen, i.e. the map with all the controls on top of it.
  *
@@ -243,17 +244,23 @@ fun IosMainScreen() {
     val systemSettingsLauncher: SystemSettingsLauncher = koinInject()
 
     /* Which way the device is pointing, clockwise from north, for the cone on the location marker.
-       North.clockwiseRotationTo(bearing) and not the other way round: clockwiseRotationTo is
-       (argument - receiver), so putting north second negates the heading and mirrors the cone. */
-    val orientationProvider = rememberDefaultOrientationProvider(
-        MapPerf.compassIntervalMs?.milliseconds ?: COMPASS_UPDATE_INTERVAL
-    )
+       heading minus north and not the other way round: the reverse negates the heading and mirrors
+       the cone.
+
+       location 0.16.0 replaced OrientationProvider (and maplibre-compose's
+       rememberDefaultOrientationProvider, which builds one) with HeadingProvider, so the provider
+       is constructed directly. The interval is still only a delivery throttle - IosHeadingProvider
+       applies it with .sample() and asks the hardware for everything it has - which is what
+       LOW_POWER_PLAN.md A7 measured. */
+    val headingProvider = remember { IosHeadingProvider() }
+    val headingRequest = remember {
+        HeadingRequest(MapPerf.compassIntervalMs?.milliseconds ?: COMPASS_UPDATE_INTERVAL)
+    }
     var deviceBearing by remember { mutableStateOf<Double?>(null) }
-    LaunchedEffect(orientationProvider, lifecycleOwner) {
+    LaunchedEffect(headingProvider, headingRequest, lifecycleOwner) {
         lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
-            orientationProvider.orientation.collect { orientation ->
-                deviceBearing = orientation?.orientation?.value
-                    ?.let { Bearing.North.clockwiseRotationTo(it).toDouble(DMS.Degrees) }
+            headingProvider.updates(headingRequest).collect { heading ->
+                deviceBearing = (heading.bearing - Bearing.North).inDegrees
             }
         }
     }
@@ -420,19 +427,18 @@ fun IosMainScreen() {
         lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
         locationUpdatesSource.updates.collectLatest { event ->
             viewModel.locationState.value = when (event) {
-                is LocationEvent.Fix -> LocationState.UPDATING
+                is LocationEvent.Update -> LocationState.UPDATING
                 is LocationEvent.Unavailable -> when (event.reason) {
                     LocationUnavailableReason.ServicesDisabled -> LocationState.ALLOWED
                     LocationUnavailableReason.TemporarilyUnavailable -> LocationState.SEARCHING
                     LocationUnavailableReason.PermissionDenied -> LocationState.DENIED
                     LocationUnavailableReason.Unsupported,
-                    LocationUnavailableReason.Misconfigured,
                     LocationUnavailableReason.UnexpectedFailure -> null
                 }
             }
             when (event) {
-                is LocationEvent.Fix -> {
-                    val location = event.location.toLocation()
+                is LocationEvent.Update -> {
+                    val location = event.toLocation()
                     displayedLocation = location
                     // what decides whether an edit counts as surveyed rather than armchair mapped
                     surveyChecker.addRecentLocation(location)

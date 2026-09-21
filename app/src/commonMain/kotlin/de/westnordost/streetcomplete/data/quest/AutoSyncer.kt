@@ -24,6 +24,7 @@ import de.westnordost.streetcomplete.util.logs.Log
 import de.westnordost.streetcomplete.util.math.distanceTo
 import kotlinx.coroutines.CoroutineName
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancelChildren
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -55,6 +56,9 @@ class AutoSyncer(
     private val networkCapabilities = MutableStateFlow<NetworkCapabilities?>(null)
 
     private var pos: LatLon? = null
+
+    /** What [onCreate] launched, so that a second owner does not add a second set of collectors */
+    private var observerJobs: List<Job> = emptyList()
 
     // there are unsynced changes -> try uploading now
     private val unsyncedChangesListener = object : UnsyncedChangesCountSource.Listener {
@@ -95,13 +99,38 @@ class AutoSyncer(
 
     /* ---------------------------------------- Lifecycle --------------------------------------- */
 
-    override fun onCreate(owner: LifecycleOwner) {
+    /* Upstream (902a349ed) made this a plain object owned by MainViewModel: everything starts in
+       init {} and stops in onClear(). Two of the three things kept below cannot hold under that
+       shape, so it is a hybrid - upstream's ownership and teardown, our lifecycle gate:
+
+       - The location collection has to stop when the app is not STARTED. It collects the *shared*
+         LocationUpdatesSource, which is shared with SharingStarted.WhileSubscribed, so a collector
+         that never leaves keeps the one CLLocationManager running for the life of the process -
+         including while the app is in the background. That is the battery regression measured in
+         LOW_POWER_PLAN.md; init {} would reintroduce it.
+       - Same for the network capabilities: IosActiveNetworkConnection.capabilities is a cold
+         callbackFlow that starts an NWPathMonitor per collection.
+       - onResume's sync trigger has no equivalent in upstream's shape at all; coming back to the
+         app is exactly when a sync is wanted.
+
+       The listener registration is in init {} / onClear() as upstream has it: their span used to
+       be onCreate..onDestroy, which is the same span as construction..onClear here. */
+
+    init {
         unsyncedChangesCountSource.addListener(unsyncedChangesListener)
         downloadProgressSource.addListener(downloadProgressListener)
         userLoginSource.addListener(userLoginStatusListener)
         teamModeQuestFilterSource.addListener(teamModeChangeListener)
+    }
 
-        coroutineScope.launch {
+    override fun onCreate(owner: LifecycleOwner) {
+        /* This is a Koin single while the lifecycle owner is not: on Android the activity is
+           recreated on a configuration change and observes the same instance again, and the view
+           model - which is what calls onClear - survives that. Without cancelling first, every
+           recreation would add another collector of the shared location stream. */
+        observerJobs.forEach { it.cancel() }
+
+        val networkJob = coroutineScope.launch {
             owner.repeatOnLifecycle(Lifecycle.State.STARTED) {
                 activeNetworkConnection.capabilities.collect { capabilities ->
                     networkCapabilities.value = capabilities
@@ -112,7 +141,7 @@ class AutoSyncer(
                 }
             }
         }
-        coroutineScope.launch {
+        val locationJob = coroutineScope.launch {
             owner.repeatOnLifecycle(Lifecycle.State.STARTED) {
                 /* The shared stream rather than a request of its own: on iOS each collection of
                    updates() is its own CLLocationManager, and the process runs at the most
@@ -125,8 +154,8 @@ class AutoSyncer(
                    the database and queries the downloaded tiles and element counts. So the 100 m
                    filter is applied here instead, against the position of the last check. */
                 locationUpdatesSource.updates.collect { locationEvent ->
-                    if (locationEvent !is LocationEvent.Fix) return@collect
-                    val (position, accuracy) = locationEvent.location.position
+                    if (locationEvent !is LocationEvent.Update) return@collect
+                    val (position, accuracy) = locationEvent.measurement
                     if (accuracy != null && accuracy >= 300.meters) return@collect
                     val newPos = LatLon(position.latitude, position.longitude)
                     val lastPos = pos
@@ -136,6 +165,7 @@ class AutoSyncer(
                 }
             }
         }
+        observerJobs = listOf(networkJob, locationJob)
     }
 
     override fun onResume(owner: LifecycleOwner) {
@@ -144,11 +174,14 @@ class AutoSyncer(
         }
     }
 
-    override fun onDestroy(owner: LifecycleOwner) {
+    /** Called by MainViewModel when it is cleared. Also cancels what [onCreate] started, so that
+     *  it is safe for the lifecycle observer never to be removed. */
+    fun onClear() {
         unsyncedChangesCountSource.removeListener(unsyncedChangesListener)
         downloadProgressSource.removeListener(downloadProgressListener)
         userLoginSource.removeListener(userLoginStatusListener)
         teamModeQuestFilterSource.removeListener(teamModeChangeListener)
+        observerJobs = emptyList()
         coroutineScope.coroutineContext.cancelChildren()
     }
 

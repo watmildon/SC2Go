@@ -13,6 +13,8 @@ import java.io.FileWriter
  *  the released StreetComplete, and found or reverted on their own if it misbehaves.
  *  Do not drop it while this build can reach the live API. */
 val appVersionName = "64.0-alpha1-prometheus"
+/** Kept although upstream dropped it: :app:checkIosAppVersion and iosApp/Configuration/Version.xcconfig
+ *  (CURRENT_PROJECT_VERSION) are pinned to this value. */
 val appVersionCode = 6400
 
 /** Localizations the app should be available in */
@@ -27,7 +29,7 @@ val bcp47ExportLanguages = setOf(
 
 /** Version of the iD presets to use
  *  see https://github.com/openstreetmap/id-tagging-schema/releases for latest version */
-val presetsVersion = "v7.0.1"
+val presetsVersion = "v7.2.0"
 
 /** Version of the Name Suggestion Index to use
  *  see https://github.com/osmlab/name-suggestion-index/tags for latest version (without leading "v"
@@ -205,7 +207,7 @@ kotlin {
 
                 // Map
                 implementation("org.maplibre.compose:maplibre-compose:0.15.0")
-                implementation("org.maplibre.compose:location:0.15.0")
+                implementation("org.maplibre.compose:location:0.16.0")
 
                 // non-lazy grid
                 // NOTE: might replace with
@@ -379,7 +381,7 @@ tasks.register<UpdateAppTranslationsTask>("updateTranslations") {
     languageCodes = bcp47ExportLanguages
     apiToken = properties["app.streetcomplete.POEditorAPIToken"] as String
     projectId = poEditorProjectId
-    targetFiles = { projectDir.resolve("/src/commonMain/composeResources/values-$it/strings.xml") }
+    targetFiles = { projectDir.resolve("src/commonMain/composeResources/values-$it/strings.xml") }
 }
 
 tasks.register<UpdateAppTranslationCompletenessTask>("updateTranslationCompleteness") {

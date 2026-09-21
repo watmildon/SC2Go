@@ -78,6 +78,7 @@ import de.westnordost.streetcomplete.util.ktx.observe
 import de.westnordost.streetcomplete.util.ktx.toLatLon
 import de.westnordost.streetcomplete.util.ktx.toOffset
 import de.westnordost.streetcomplete.util.ktx.toast
+import de.westnordost.streetcomplete.util.ktx.updatesWithPermissionChanges
 import de.westnordost.streetcomplete.util.math.area
 import de.westnordost.streetcomplete.util.math.enclosingBoundingBox
 import de.westnordost.streetcomplete.util.math.enlargedBy
@@ -131,17 +132,20 @@ class MainActivity :
 
     override val scope: Scope by activityScope()
 
-    private val autoSyncer: AutoSyncer by inject()
     private val prefs: Preferences by inject()
     private val visibleQuestsSource: VisibleQuestsSource by inject()
     private val mapDataWithEditsSource: MapDataWithEditsSource by inject()
     private val notesSource: NotesWithEditsSource by inject()
     private val questsHiddenSource: QuestsHiddenSource by inject()
-    private val feedsUpdater: FeedsUpdater by inject()
     private val featureDictionary: Lazy<FeatureDictionary> by inject(named("FeatureDictionaryLazy"))
     private val locationProvider: LocationProvider by inject()
     private val systemSettingsLauncher: SystemSettingsLauncher by inject()
-    private val periodicCleaner: PeriodicCleaner by inject()
+
+    /* Upstream (902a349ed) handed the AutoSyncer to MainViewModel and dropped this. Our AutoSyncer
+       is still a DefaultLifecycleObserver, because the location and network collections have to
+       stop when the app is not STARTED - see the comment in AutoSyncer - so it still needs a
+       lifecycle to observe. Same instance either way: it is a Koin single. */
+    private val autoSyncer: AutoSyncer by inject()
 
     private val viewModel by viewModel<MainViewModel>()
     private val editHistoryViewModel by viewModel<EditHistoryViewModel>()
@@ -186,14 +190,6 @@ class MainActivity :
         }
 
         lifecycle.addObserver(autoSyncer)
-
-        feedsUpdater.updateAtMostDaily()
-        // this must be enqueued once the UI is started, i.e. not in headless mode. This is why
-        // it is done here, rather than in AppInitializer. Reason is that
-        // AppInitializer.initialize() is also executed when a background job is run. But we don't
-        // want to enqueue the cleanup job again while running the cleanup job, but only once after
-        // the user actually opened the app!
-        periodicCleaner.enqueue()
 
         compose.setContent { AppTheme {
             val mapAppLauncher = rememberMapAppLauncher()
@@ -351,15 +347,14 @@ class MainActivity :
         }
         // TODO collect LocationUpdatesSource.updates instead, as iOS does: AutoSyncer collects the
         //  shared stream now, so this is the one remaining collection with a request of its own
-        observe(locationProvider.updates(LocationRequest())) { locationEvent ->
+        observe(locationProvider.updatesWithPermissionChanges(LocationRequest())) { locationEvent ->
             viewModel.locationState.value = when (locationEvent) {
-                is LocationEvent.Fix -> LocationState.UPDATING
+                is LocationEvent.Update -> LocationState.UPDATING
                 is LocationEvent.Unavailable -> when (locationEvent.reason) {
                     LocationUnavailableReason.ServicesDisabled -> LocationState.ALLOWED
                     LocationUnavailableReason.TemporarilyUnavailable -> LocationState.SEARCHING
                     LocationUnavailableReason.PermissionDenied -> LocationState.DENIED
                     LocationUnavailableReason.Unsupported,
-                    LocationUnavailableReason.Misconfigured,
                     LocationUnavailableReason.UnexpectedFailure -> null
                 }
             }
@@ -496,7 +491,7 @@ class MainActivity :
 
     private fun getDisplayedPoint(): PointF? {
         val mapFragment = mapFragment ?: return null
-        val displayedPosition = mapFragment.displayedLocation?.position?.value?.toLatLon() ?: return null
+        val displayedPosition = mapFragment.displayedLocation?.position?.toLatLon() ?: return null
         return mapFragment.getPointOf(displayedPosition)
     }
 
@@ -594,7 +589,7 @@ class MainActivity :
         viewModel.isRecordingTracks.value = false
         val mapFragment = mapFragment ?: return
         mapFragment.stopPositionTrackRecording()
-        val pos = mapFragment.displayedLocation?.position?.value?.toLatLon() ?: return
+        val pos = mapFragment.displayedLocation?.position?.toLatLon() ?: return
         composeNote(pos, mapFragment.recordedTracks.takeIf { it.isNotEmpty() })
     }
 

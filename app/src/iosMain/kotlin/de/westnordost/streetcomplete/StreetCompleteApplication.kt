@@ -4,6 +4,7 @@ import com.russhwolf.settings.SettingsListener
 import de.westnordost.streetcomplete.data.CacheTrimmer
 import de.westnordost.streetcomplete.data.Cleaner
 import de.westnordost.streetcomplete.data.FeedsUpdater
+import de.westnordost.streetcomplete.data.IosPeriodicCleaner
 import de.westnordost.streetcomplete.data.Preloader
 import de.westnordost.streetcomplete.data.download.tiles.DownloadedTilesController
 import de.westnordost.streetcomplete.data.metrics.IosMetricsCollector
@@ -43,6 +44,16 @@ fun initApp() {
 
     val koin = initKoin()
     Log.instances.add(koin.get<DatabaseLogger>())
+
+    /* Has to happen here and nowhere else: BGTaskScheduler.register() must be called before
+       application(_:didFinishLaunchingWithOptions:) returns - iOS throws if it is called later or
+       twice - and this runs from iOSApp.init(), i.e. inside that window, exactly once, on the main
+       thread, for every launch including a launch made only to run the background task itself.
+       register() also throws if app.streetcomplete.cleanup is missing from the Info.plist's
+       BGTaskSchedulerPermittedIdentifiers, so a missing key is a launch crash, not a silent no-op.
+       The job is submitted elsewhere - MainViewModel calls PeriodicCleaner.enqueue() - so that a
+       headless background launch does not re-enqueue while it is cleaning. */
+    koin.get<IosPeriodicCleaner>().register()
 
     applicationScope.launch {
         // in one coroutine, so that the pruning happens after the preloading, as on Android

@@ -17,7 +17,7 @@ import org.maplibre.compose.location.LocationEvent
 import org.maplibre.compose.location.LocationPermission
 import org.maplibre.compose.location.LocationProvider
 import org.maplibre.compose.location.LocationRequest
-import org.maplibre.compose.location.PositionWithAccuracy
+import org.maplibre.compose.location.LocationMeasurement
 import org.maplibre.spatialk.geojson.Position
 import org.maplibre.spatialk.units.International
 import org.maplibre.spatialk.units.Length
@@ -30,6 +30,7 @@ import kotlin.test.assertIs
 import kotlin.test.assertTrue
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.seconds
+import kotlin.time.Instant
 import kotlin.time.TimeSource
 
 /** The request the shared stream starts the location manager with. The provider is a fake that
@@ -204,19 +205,21 @@ class LocationUpdatesSourceTest {
 
         val first = withTimeout(5.seconds) { source.updates.first() }
 
-        val fix = assertIs<LocationEvent.Fix>(first)
-        assertTrue(fix.location.timestamp.elapsedNow() < 30.seconds, "the stale fix came through")
+        val fix = assertIs<LocationEvent.Update>(first)
+        assertTrue(fix.measurementMark.elapsedNow() < 30.seconds, "the stale fix came through")
     }
 
     private val granted = LocationPermission.Granted(LocationAccuracyAuthorization.Precise)
 
     private fun Duration.ago() = TimeSource.Monotonic.markNow() - this
 
-    private fun fixTaken(at: TimeSource.Monotonic.ValueTimeMark) = LocationEvent.Fix(
-        org.maplibre.compose.location.Location(
-            position = PositionWithAccuracy(Position(0.0, 0.0), 5.meters),
-            timestamp = at,
-        )
+    private fun fixTaken(at: TimeSource.Monotonic.ValueTimeMark) = LocationEvent.Update(
+        LocationMeasurement(
+            position = Position(0.0, 0.0),
+            horizontalAccuracy = 5.meters,
+            measuredAt = Instant.fromEpochSeconds(0),
+        ),
+        at,
     )
 
     private fun Length.inMeters() = toDouble(International.Meters)

@@ -109,7 +109,7 @@ class LocationUpdatesSource(
             )
 
     private fun LocationEvent.isStaleFix(): Boolean =
-        this is LocationEvent.Fix && location.timestamp.elapsedNow() > MAX_REPLAYED_FIX_AGE
+        this is LocationEvent.Update && measurementMark.elapsedNow() > MAX_REPLAYED_FIX_AGE
 
     companion object {
         private const val TAG = "LocationUpdatesSource"

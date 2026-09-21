@@ -4,6 +4,7 @@ import androidx.sqlite.driver.bundled.BundledSQLiteDriver
 import com.russhwolf.settings.NSUserDefaultsSettings
 import com.russhwolf.settings.ObservableSettings
 import de.westnordost.osmfeatures.FeatureDictionary
+import de.westnordost.streetcomplete.data.Cleaner
 import de.westnordost.streetcomplete.data.Database
 import de.westnordost.streetcomplete.data.DatabaseImpl
 import de.westnordost.streetcomplete.data.IosPeriodicCleaner
@@ -12,19 +13,14 @@ import de.westnordost.streetcomplete.data.StreetCompleteDatabaseConfigurator
 import de.westnordost.streetcomplete.data.connection.ActiveNetworkConnection
 import de.westnordost.streetcomplete.data.connection.IosActiveNetworkConnection
 import de.westnordost.streetcomplete.data.download.DownloadController
-import de.westnordost.streetcomplete.data.download.Downloader
 import de.westnordost.streetcomplete.data.download.IosDownloadController
 import de.westnordost.streetcomplete.data.initialize
 import de.westnordost.streetcomplete.data.maptiles.IosMapTilesDownloader
 import de.westnordost.streetcomplete.data.maptiles.MapTilesDownloader
-import de.westnordost.streetcomplete.data.osm.edits.upload.changesets.ChangesetAutoCloser
-import de.westnordost.streetcomplete.data.osm.edits.upload.changesets.IosChangesetAutoCloser
-import de.westnordost.streetcomplete.data.osm.edits.upload.changesets.OpenChangesetsManager
 import de.westnordost.streetcomplete.data.power.IosPowerSaveSource
 import de.westnordost.streetcomplete.data.power.PowerSaveSource
 import de.westnordost.streetcomplete.data.upload.IosUploadController
 import de.westnordost.streetcomplete.data.upload.UploadController
-import de.westnordost.streetcomplete.data.upload.Uploader
 import de.westnordost.streetcomplete.screens.about.AppStoreInfo
 import de.westnordost.streetcomplete.screens.about.IosAppStoreInfo
 import de.westnordost.streetcomplete.ui.util.measure.ArSupportChecker
@@ -143,13 +139,18 @@ val iosModule = module {
 
     // background jobs
 
-    single<UploadController> { IosUploadController({ get<Uploader>() }) }
+    /* Uploader/Downloader are resolved eagerly (upstream's shape): nothing in either one's
+       dependency graph needs UploadController or DownloadController - only MainViewModelImpl and
+       AutoSyncer do - so there is no Koin cycle and the lazy `() -> Uploader` provider our
+       controllers used to take is no longer needed. */
+    single<UploadController> { IosUploadController(get()) } onClose { (it as? IosUploadController)?.close() }
 
-    single<DownloadController> { IosDownloadController({ get<Downloader>() }) }
+    single<DownloadController> { IosDownloadController(get()) } onClose { (it as? IosDownloadController)?.close() }
 
-    /* a single, and constructed with the manager provided lazily: our IosChangesetAutoCloser keeps
-       a scope and a pending job of its own, unlike upstream's TODO() stub */
-    single<ChangesetAutoCloser> { IosChangesetAutoCloser({ get<OpenChangesetsManager>() }) }
+    /* ChangesetAutoCloser is gone on every platform (upstream #7123): the OSM API closes an idle
+       changeset after an hour by itself. */
 
-    factory<PeriodicCleaner> { IosPeriodicCleaner() }
+    single { IosPeriodicCleaner { get<Cleaner>().cleanOld() } } onClose { it?.close() }
+
+    single<PeriodicCleaner> { get<IosPeriodicCleaner>() }
 }

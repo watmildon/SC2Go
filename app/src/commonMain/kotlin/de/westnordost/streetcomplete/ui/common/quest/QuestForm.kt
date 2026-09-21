@@ -1,5 +1,6 @@
 package de.westnordost.streetcomplete.ui.common.quest
 
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -7,6 +8,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.ContentAlpha
 import androidx.compose.material.LocalContentAlpha
+import androidx.compose.material.LocalTextStyle
 import androidx.compose.material.MaterialTheme
 import androidx.compose.material.Text
 import androidx.compose.runtime.Composable
@@ -30,6 +32,7 @@ import de.westnordost.streetcomplete.ui.common.bottom_sheet.BottomSheetFormScaff
 import de.westnordost.streetcomplete.ui.common.bottom_sheet.DismissFormHandler
 import de.westnordost.streetcomplete.ui.common.dialogs.ConfirmDiscardDialog
 import de.westnordost.streetcomplete.ui.theme.defaultTextLinkStyles
+import de.westnordost.streetcomplete.ui.theme.titleLarge
 import de.westnordost.streetcomplete.ui.theme.titleSmall
 import de.westnordost.streetcomplete.ui.util.annotateLinks
 import de.westnordost.streetcomplete.util.ktx.isDeletable
@@ -42,7 +45,7 @@ import org.koin.compose.koinInject
 /** A generic quest form, with a [title], [subtitle], [hintText] and [hintImages] in the
  *  header speech bubble, then an optional [note] by another mapper shown below as another speech
  *  bubble, then finally the speech bubble containing the center-aligned [content] padded with a
- *  [contentPadding] (if there is any content) and an OK button to confirm the input. If 
+ *  [contentPadding] (if there is any content) and an OK button to confirm the input. If
  *  [isResurvey] is true an additional title "Is this still correct" is added.
  *
  *  **This composable requires the `LocalQuestType` composition local to be set!**
@@ -200,18 +203,32 @@ private fun QuestForm(
         return result
     }
 
+    val questHeader: @Composable () -> Unit = {
+        QuestHeader(
+            title = title,
+            subtitle = subtitle,
+            hintText = hintText,
+            hintImages = hintImages,
+        )
+    }
+
     BottomSheetFormScaffold(
         header = {
-            QuestHeader(
-                title = title,
-                subtitle = subtitle,
-                hintText = hintText,
-                hintImages = hintImages,
-                isResurvey = isResurvey,
-            )
+            if (isResurvey) {
+                CompositionLocalProvider(LocalTextStyle provides MaterialTheme.typography.titleLarge) {
+                    Text(stringResource(Res.string.resurvey_title))
+                }
+            } else {
+                questHeader()
+            }
         },
-        note = if (note != null) {
-            { ObjectNote(text = note) }
+        note = if (note != null || isResurvey) {
+            {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    questHeader()
+                    if (note != null) ObjectNote(text = note)
+                }
+            }
         } else {
             null
         },
