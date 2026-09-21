@@ -78,10 +78,12 @@ import kotlin.math.max
 import kotlin.math.sqrt
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
+import kotlin.time.Duration.Companion.seconds
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.retryWhen
 import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.koinInject
@@ -259,9 +261,26 @@ fun IosMainScreen() {
     var deviceBearing by remember { mutableStateOf<Double?>(null) }
     LaunchedEffect(headingProvider, headingRequest, lifecycleOwner) {
         lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
-            headingProvider.updates(headingRequest).collect { heading ->
-                deviceBearing = (heading.bearing - Bearing.North).inDegrees
-            }
+            headingProvider.updates(headingRequest)
+                /* IosHeadingProvider does not report a failure as an event: its delegate closes
+                   the callbackFlow with an IosHeadingException when CLLocationManager calls
+                   didFailWithError, which magnetic interference alone is enough to trigger. An
+                   exception raised inside a composition's LaunchedEffect takes the whole Compose
+                   scene down on iOS - a black screen, with the process still running - so it must
+                   not escape here. Restarted with a backoff, as the location stream is in
+                   LocationUpdatesSource, rather than being left dead until the next STARTED: the
+                   interference that caused it is usually over in seconds. The cone is dropped
+                   while the stream is down, so that it disappears instead of pointing at a
+                   heading from before the failure. */
+                .retryWhen { e, attempt ->
+                    Log.e(TAG, "Heading stream failed, restarting", e)
+                    deviceBearing = null
+                    delay(minOf(attempt + 1, MAX_HEADING_RETRY_DELAY_SECONDS).seconds)
+                    true
+                }
+                .collect { heading ->
+                    deviceBearing = (heading.bearing - Bearing.North).inDegrees
+                }
         }
     }
     /* Drives the real map along a fixed route so a power trace can be recorded without a finger
@@ -847,6 +866,9 @@ private suspend fun CameraState.moveTo(
  *  running stream, not a rate the hardware is asked for, and a still device reports nothing. */
 private val COMPASS_UPDATE_INTERVAL = 33.milliseconds
 
+/** The retry delay of the heading stream grows by a second per failed attempt, up to this */
+private const val MAX_HEADING_RETRY_DELAY_SECONDS = 10L
+
 /* The scripted pan used by MapPerf.autoDrive. Offsets in degrees from wherever the map started:
    0.002 degrees of latitude is roughly 220m, so each leg is a real pan over real downloaded data
    rather than a twitch. Kept deliberately boring and repeatable - the point is that two runs of it
@@ -879,3 +901,4 @@ private const val TRACK_BEARING_LOOKBACK = 200
  *  stay above [TRACK_BEARING_LOOKBACK], which is what is kept back each time. */
 private const val TRACK_MAX_DRAWN_POINTS = 400
 
+private const val TAG = "MainScreen"

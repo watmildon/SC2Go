@@ -3,7 +3,6 @@ package de.westnordost.streetcomplete
 import com.russhwolf.settings.SettingsListener
 import de.westnordost.streetcomplete.data.CacheTrimmer
 import de.westnordost.streetcomplete.data.Cleaner
-import de.westnordost.streetcomplete.data.FeedsUpdater
 import de.westnordost.streetcomplete.data.IosPeriodicCleaner
 import de.westnordost.streetcomplete.data.Preloader
 import de.westnordost.streetcomplete.data.download.tiles.DownloadedTilesController
@@ -62,8 +61,6 @@ fun initApp() {
             nowAsEpochMilliseconds() - ApplicationConstants.MAX_UNDO_HISTORY_AGE
         )
     }
-
-    koin.get<FeedsUpdater>().updateNow()
 
     /* Android schedules this through the WorkManager, once a day and not until an hour after
        start. iOS has nothing comparable that is worth the trouble here, so it is done at start

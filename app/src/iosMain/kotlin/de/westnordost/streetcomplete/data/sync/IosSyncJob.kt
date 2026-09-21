@@ -13,6 +13,7 @@ import kotlinx.coroutines.job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 import platform.UIKit.UIApplication
 import platform.UIKit.UIBackgroundTaskInvalid
 
@@ -49,7 +50,14 @@ internal class IosSyncJob(private val name: String) {
                         endTask()
                     })
                     try {
-                        block()
+                        /* The work itself off the main thread: upstream's downloaders no longer
+                           switch dispatchers themselves (MapDataDownloader.download and
+                           NotesDownloader.download only wrap the database write), so whatever
+                           launches them decides where the multi-MB OSM response is parsed - and
+                           this scope is Main, because the background task API has to be called
+                           from there. Default rather than IO: this is CPU-bound parsing, and the
+                           database write inside picks IO for itself. */
+                        withContext(Dispatchers.Default) { block() }
                     } catch (e: CancellationException) {
                         throw e
                     } catch (e: Exception) {

@@ -14,11 +14,14 @@ import de.westnordost.streetcomplete.data.preferences.Preferences
 import de.westnordost.streetcomplete.util.ktx.now
 import kotlinx.datetime.LocalDate
 import de.westnordost.streetcomplete.util.logs.Log
+import kotlinx.atomicfu.locks.ReentrantLock
+import kotlinx.atomicfu.locks.withLock
 import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineName
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
@@ -34,6 +37,9 @@ class Cleaner(
     private val calendarEventsController: CalendarEventsController,
     private val prefs: Preferences,
 ) {
+    private val cleanOldLock = ReentrantLock()
+    private var cleanOldJob: Job? = null
+
     private val scope = CoroutineScope(
         SupervisorJob() + CoroutineName(TAG) + Dispatchers.IO +
         /* cleaning up is entirely optional, so it must never be able to take the app down, which
@@ -53,7 +59,17 @@ class Cleaner(
     }
 
     /** Cancel the returned job to stop cleanup between blocking batches. */
-    fun cleanOld() = scope.launch {
+    fun cleanOld(): Job = cleanOldLock.withLock {
+        /* The same job, not a second one, while one is still running: on iOS both the app start
+           and the background cleanup task ask for a cleanup, and in a launch made only to run
+           that task both happen in the same process, from different threads. Two cleanups in
+           parallel would only fight over the database lock and delete each other's batches - and
+           the task's expiration handler cancels the job it was given, which would leave the other
+           one running past the deadline. */
+        cleanOldJob?.takeIf { it.isActive } ?: launchCleanOld().also { cleanOldJob = it }
+    }
+
+    private fun launchCleanOld() = scope.launch {
         prefs.lastCleanup = LocalDate.now()
         val time = nowAsEpochMilliseconds()
 

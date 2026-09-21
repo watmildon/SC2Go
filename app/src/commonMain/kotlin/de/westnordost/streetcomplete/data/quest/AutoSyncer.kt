@@ -100,7 +100,7 @@ class AutoSyncer(
     /* ---------------------------------------- Lifecycle --------------------------------------- */
 
     /* Upstream (902a349ed) made this a plain object owned by MainViewModel: everything starts in
-       init {} and stops in onClear(). Two of the three things kept below cannot hold under that
+       init {} and stops in onClear(). Three of the four things below cannot hold under that
        shape, so it is a hybrid - upstream's ownership and teardown, our lifecycle gate:
 
        - The location collection has to stop when the app is not STARTED. It collects the *shared*
@@ -112,18 +112,30 @@ class AutoSyncer(
          callbackFlow that starts an NWPathMonitor per collection.
        - onResume's sync trigger has no equivalent in upstream's shape at all; coming back to the
          app is exactly when a sync is wanted.
+       - The listeners cannot be added in init {} either: upstream can, because there the object
+         is created with the view model and dies with it, but here it is a Koin single that
+         outlives every MainViewModel. init {} runs once for the process while onClear() removes
+         the listeners, so after the first view model was cleared - backing out of the activity
+         on Android, latent on iOS - the single would be left alive with no listeners at all and
+         auto-sync would half-die, silently: the location and network collectors come back with
+         the next owner, but nothing would react to new unsynced changes, a finished download, a
+         login or team mode again. So the registration is paired with the teardown instead,
+         onCreate..onClear, guarded so that a second owner observing the same single does not add
+         each listener twice. Both are called on the main thread, so the flag needs no
+         synchronisation. */
 
-       The listener registration is in init {} / onClear() as upstream has it: their span used to
-       be onCreate..onDestroy, which is the same span as construction..onClear here. */
-
-    init {
-        unsyncedChangesCountSource.addListener(unsyncedChangesListener)
-        downloadProgressSource.addListener(downloadProgressListener)
-        userLoginSource.addListener(userLoginStatusListener)
-        teamModeQuestFilterSource.addListener(teamModeChangeListener)
-    }
+    /** Whether [onCreate] has added the listeners that [onClear] removes */
+    private var listenersRegistered = false
 
     override fun onCreate(owner: LifecycleOwner) {
+        if (!listenersRegistered) {
+            listenersRegistered = true
+            unsyncedChangesCountSource.addListener(unsyncedChangesListener)
+            downloadProgressSource.addListener(downloadProgressListener)
+            userLoginSource.addListener(userLoginStatusListener)
+            teamModeQuestFilterSource.addListener(teamModeChangeListener)
+        }
+
         /* This is a Koin single while the lifecycle owner is not: on Android the activity is
            recreated on a configuration change and observes the same instance again, and the view
            model - which is what calls onClear - survives that. Without cancelling first, every
@@ -177,10 +189,13 @@ class AutoSyncer(
     /** Called by MainViewModel when it is cleared. Also cancels what [onCreate] started, so that
      *  it is safe for the lifecycle observer never to be removed. */
     fun onClear() {
-        unsyncedChangesCountSource.removeListener(unsyncedChangesListener)
-        downloadProgressSource.removeListener(downloadProgressListener)
-        userLoginSource.removeListener(userLoginStatusListener)
-        teamModeQuestFilterSource.removeListener(teamModeChangeListener)
+        if (listenersRegistered) {
+            listenersRegistered = false
+            unsyncedChangesCountSource.removeListener(unsyncedChangesListener)
+            downloadProgressSource.removeListener(downloadProgressListener)
+            userLoginSource.removeListener(userLoginStatusListener)
+            teamModeQuestFilterSource.removeListener(teamModeChangeListener)
+        }
         observerJobs = emptyList()
         coroutineScope.coroutineContext.cancelChildren()
     }
