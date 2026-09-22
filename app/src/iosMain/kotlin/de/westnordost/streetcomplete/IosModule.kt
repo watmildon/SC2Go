@@ -19,6 +19,7 @@ import de.westnordost.streetcomplete.data.location.IosRecordingLocationProvider
 import de.westnordost.streetcomplete.data.location.RECORDING_LOCATION_PROVIDER
 import de.westnordost.streetcomplete.data.maptiles.IosMapTilesDownloader
 import de.westnordost.streetcomplete.data.maptiles.MapTilesDownloader
+import de.westnordost.streetcomplete.data.osmtracks.IosTrackRecorder
 import de.westnordost.streetcomplete.data.power.IosPowerSaveSource
 import de.westnordost.streetcomplete.data.power.PowerSaveSource
 import de.westnordost.streetcomplete.data.upload.IosUploadController
@@ -129,6 +130,11 @@ val iosModule = module {
 
     factory<SystemSettingsLauncher> { IosSystemSettingsLauncher() }
 
+    // track recording
+
+    /* A single, not something the main screen owns: a recording keeps running while the app is in
+       the background, which is the whole point of it. See IosTrackRecorder. */
+    single { IosTrackRecorder(get(), get()) }
 
     // settings
 

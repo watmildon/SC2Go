@@ -38,7 +38,9 @@ import de.westnordost.streetcomplete.data.location.SurveyChecker
 import de.westnordost.streetcomplete.data.osm.geometry.ElementGeometry
 import de.westnordost.streetcomplete.data.osm.mapdata.BoundingBox
 import de.westnordost.streetcomplete.data.osm.mapdata.LatLon
+import de.westnordost.streetcomplete.data.osmtracks.IosTrackRecorder
 import de.westnordost.streetcomplete.data.osmtracks.Trackpoint
+import de.westnordost.streetcomplete.data.osmtracks.TrackRecordingStats.MIN_TRACK_ACCURACY
 import de.westnordost.streetcomplete.data.osmtracks.isTrackGap
 import de.westnordost.streetcomplete.data.preferences.Preferences
 import de.westnordost.streetcomplete.data.quest.AutoSyncer
@@ -61,6 +63,7 @@ import de.westnordost.streetcomplete.screens.main.map.toPosition
 import de.westnordost.streetcomplete.screens.settings.SettingsDestination
 import de.westnordost.streetcomplete.screens.settings.SettingsNavHost
 import de.westnordost.streetcomplete.screens.user.UserNavHost
+import de.westnordost.streetcomplete.startTrackRecordingOnLaunch
 import de.westnordost.streetcomplete.ui.common.ToastPopup
 import de.westnordost.streetcomplete.ui.common.dialogs.ConfirmationDialog
 import de.westnordost.streetcomplete.ui.common.quest.MapClick
@@ -118,6 +121,11 @@ fun IosMainScreen() {
     /* uploads edits as they are made and downloads around the user's location, the same way
        MainActivity hooks it into its lifecycle on Android */
     val autoSyncer: AutoSyncer = koinInject()
+
+    /* Owns the track recording, which outlives this screen being on screen: it keeps collecting
+       fixes while the app is in the background, which is what the Live Activity shows and what
+       makes the recorded trace the whole walk rather than the parts of it that were watched. */
+    val trackRecorder: IosTrackRecorder = koinInject()
     /* the one location stream, shared with the AutoSyncer - so that there is one
        CLLocationManager, not one per collector, see LocationUpdatesSource */
     val locationUpdatesSource: LocationUpdatesSource = koinInject()
@@ -321,6 +329,11 @@ fun IosMainScreen() {
     val track = remember { mutableStateListOf<Trackpoint>() }
     val oldTracks = remember { mutableStateListOf<List<Trackpoint>>() }
     val isRecordingTracks by viewModel.isRecordingTracks.collectAsState()
+    /* What the recorder has collected, which while recording is more than [track]: this screen's
+       collector is lifecycle scoped and sees nothing while the app is in the background, the
+       recorder's is not. Only the drawn line and the trace handed to the note come from it; the
+       direction of travel still comes from [track], which is what MainActivity uses too. */
+    val recordingSession by trackRecorder.session.collectAsState()
 
     /** The end of the track, which is all the direction of travel depends on.
      *
@@ -331,8 +344,15 @@ fun IosMainScreen() {
 
     /* Keyed on the size because this composable recomposes on every frame the camera moves, and
        these would otherwise rebuild the whole day's path each time. Points are only ever appended,
-       and starting a new stretch always changes both sizes. */
-    val trackPositions = remember(track.size) { track.map { it.position } }
+       and starting a new stretch always changes both sizes.
+
+       While recording, the recorder's points are drawn instead of this screen's, so that coming
+       back to the foreground shows the stretch walked while it was in the background rather than
+       a line that stops where the app was last looked at. */
+    val recordedTrack = recordingSession?.trackpoints
+    val trackPositions = remember(track.size, recordedTrack?.size) {
+        (recordedTrack ?: track).map { it.position }
+    }
     val oldTrackPositions = remember(oldTracks.size) {
         oldTracks.map { stretch -> stretch.map { it.position } }
     }
@@ -534,6 +554,9 @@ fun IosMainScreen() {
 
     fun startTrackRecording() {
         startNewTrack()
+        /* before the flag, so that there is a session for the drawn track to come out of by the
+           time anything recomposes on it */
+        trackRecorder.start()
         viewModel.isRecordingTracks.value = true
     }
 
@@ -543,17 +566,31 @@ fun IosMainScreen() {
            there is nothing to do but keep recording. Android stops anyway and loses the track,
            which is worst exactly when it is most likely: no fix is why reception was lost. */
         val position = displayedLocation?.position ?: return
-        /* The trace is taken before the flag is cleared, not after: clearing it first opens a
-           window - however short - in which rollOverSettledTrack would consider the track fair
-           game and move all but the bearing lookback into the old stretches, and what got
-           attached to the note would be the last minute of a survey that lasted hours. */
-        val recorded = track.toList()
+        /* The recorder's trace, not this screen's: [track] is missing every fix that arrived
+           while the app was in the background, which on a real survey is most of them.
+
+           Taken before the flag is cleared, not after: clearing it first opens a window - however
+           short - in which rollOverSettledTrack would consider this screen's track fair game and
+           move all but the bearing lookback into the old stretches. That no longer decides what
+           the note gets, but the drawn line would still jump. */
+        val recorded = trackRecorder.stop()
         viewModel.isRecordingTracks.value = false
         startNewTrack()
         mainBottomSheetViewModel.showCreateNote(recorded.takeIf { it.isNotEmpty() })
         scope.launch {
             cameraState.animateTo(cameraState.position, Duration.ZERO)
             cameraState.moveTo(position, formCrosshairOffset, windowInfo.containerDpSize)
+        }
+    }
+
+    /* The `-record YES` launch argument, which starts a recording without anyone touching the
+       screen. Not `LaunchedEffect(Unit)` guarded by the flag alone: starting it before the first
+       fix would be honest but useless, so it waits a moment for the map to settle first, the same
+       way autodrive does. See startTrackRecordingOnLaunch. */
+    if (startTrackRecordingOnLaunch) {
+        LaunchedEffect(Unit) {
+            delay(AUTO_RECORD_SETTLE)
+            if (!viewModel.isRecordingTracks.value) startTrackRecording()
         }
     }
 
@@ -887,11 +924,11 @@ private val AUTO_DRIVE_LEG_DURATION = 4000.milliseconds
 /** Long enough for the first data download and the icon warm-up to be out of the way. */
 private val AUTO_DRIVE_SETTLE = 8000.milliseconds
 
+/** How long `-record YES` waits before it starts recording, so that the map has a fix by then */
+private val AUTO_RECORD_SETTLE = 3000.milliseconds
+
 /** How far the map is tilted when it turns in the direction the user is going, as on Android */
 private const val NAVIGATION_MODE_TILT = 60.0
-
-/** Fixes less precise than this are not put on the track, as on Android */
-private const val MIN_TRACK_ACCURACY = 20f
 
 /** How many fixes back the direction of travel is worked out from */
 private const val TRACK_BEARING_LOOKBACK = 200

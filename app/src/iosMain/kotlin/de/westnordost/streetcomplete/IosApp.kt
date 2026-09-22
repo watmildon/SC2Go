@@ -56,6 +56,16 @@ private val initialScreen: Screen?
             ?.let { name -> Screen.entries.find { it.name == name } }
     }
 
+/** Whether to start recording a track as soon as the main screen is up, without a long press:
+ *  `xcrun simctl launch booted <bundle id> -screen Main -record YES`.
+ *
+ *  Only in debug builds, and only a shortcut for a tap - the recording it starts is the real one,
+ *  with the real Live Activity. It exists because the thing worth testing (what the Dynamic Island
+ *  shows while the app is in the background) cannot be reached by hand on a simulator: getting
+ *  there means backgrounding the app, and the app cannot be driven once it is backgrounded. */
+internal val startTrackRecordingOnLaunch: Boolean
+    get() = BuildConfig.DEBUG && NSUserDefaults.standardUserDefaults.boolForKey("record")
+
 /** Temporary launcher to try out the screens that have been migrated to Compose Multiplatform
  *  already, until the real main screen works on iOS */
 @Composable
