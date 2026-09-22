@@ -11,22 +11,28 @@ import WidgetKit
 // The elapsed time is a `Text(timerInterval:)` rather than a value in the state: SwiftUI counts it
 // up by itself, so the clock keeps running between the activity's updates - which are at most one
 // every five seconds - instead of costing one per second.
+//
+// `context.isStale` is honoured in every presentation. The app gives each update a staleDate a
+// couple of minutes out, so a recording whose app was killed - ActivityKit outlives the process -
+// stops looking like a recording: the counter is replaced by "not updating" and the red goes grey,
+// rather than a Lock Screen banner counting up a walk that nothing is recording any more.
 struct TrackRecordingLiveActivity: Widget {
     var body: some WidgetConfiguration {
         ActivityConfiguration(for: TrackRecordingAttributes.self) { context in
-            LockScreenBanner(state: context.state)
+            LockScreenBanner(state: context.state, isStale: context.isStale)
         } dynamicIsland: { context in
             DynamicIsland {
                 DynamicIslandExpandedRegion(.leading) {
                     Label(formatTrackDistance(context.state.distanceMeters), systemImage: "figure.walk")
                         .font(.title3)
+                        .foregroundStyle(context.isStale ? Color.secondary : Color.primary)
                 }
                 DynamicIslandExpandedRegion(.trailing) {
-                    Text(timerInterval: context.state.startedAt...Date.distantFuture, countsDown: false)
+                    ElapsedTime(startedAt: context.state.startedAt, isStale: context.isStale)
                         .font(.title3)
-                        .monospacedDigit()
                         .multilineTextAlignment(.trailing)
-                        .frame(maxWidth: 80)
+                        // wide enough for a survey that ran past an hour, i.e. 1:23:45
+                        .frame(maxWidth: 110)
                 }
                 DynamicIslandExpandedRegion(.bottom) {
                     VStack(alignment: .leading, spacing: 2) {
@@ -39,16 +45,24 @@ struct TrackRecordingLiveActivity: Widget {
                         }
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
+                    .foregroundStyle(context.isStale ? Color.secondary : Color.primary)
                 }
             } compactLeading: {
-                Image(systemName: "record.circle")
-                    .foregroundStyle(.red)
+                Image(systemName: context.isStale ? "exclamationmark.triangle" : "record.circle")
+                    .foregroundStyle(context.isStale ? Color.secondary : Color.red)
             } compactTrailing: {
                 Label("\(context.state.nearbyQuestCount)", systemImage: "mappin.and.ellipse")
                     .font(.caption)
+                    .foregroundStyle(context.isStale ? Color.secondary : Color.primary)
             } minimal: {
-                Text("\(context.state.nearbyQuestCount)")
-                    .font(.caption)
+                // the count alone, greyed, would be indistinguishable from a live one at this size
+                if context.isStale {
+                    Image(systemName: "exclamationmark.triangle")
+                        .foregroundStyle(.secondary)
+                } else {
+                    Text("\(context.state.nearbyQuestCount)")
+                        .font(.caption)
+                }
             }
             // tapping it opens the app, which is the default and all v1 does; deep linking to the
             // nearest quest via sc2go:// is worth doing, but it is a separate piece of work
@@ -59,19 +73,20 @@ struct TrackRecordingLiveActivity: Widget {
 /// The same content in one row, for the Lock Screen and for devices without an Island.
 private struct LockScreenBanner: View {
     let state: TrackRecordingAttributes.ContentState
+    let isStale: Bool
 
     var body: some View {
         HStack(alignment: .center, spacing: 12) {
-            Image(systemName: "record.circle")
+            Image(systemName: isStale ? "exclamationmark.triangle" : "record.circle")
                 .font(.title2)
-                .foregroundStyle(.red)
+                .foregroundStyle(isStale ? Color.secondary : Color.red)
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 8) {
                     Text(formatTrackDistance(state.distanceMeters))
                     Text("·")
-                    Text(timerInterval: state.startedAt...Date.distantFuture, countsDown: false)
-                        .monospacedDigit()
-                        .frame(maxWidth: 70, alignment: .leading)
+                    ElapsedTime(startedAt: state.startedAt, isStale: isStale)
+                        // wide enough for a survey that ran past an hour, i.e. 1:23:45
+                        .frame(maxWidth: 100, alignment: .leading)
                 }
                 .font(.headline)
                 Text(nearbyQuestsText(state))
@@ -86,6 +101,29 @@ private struct LockScreenBanner: View {
             Spacer(minLength: 0)
         }
         .padding()
+        .foregroundStyle(isStale ? Color.secondary : Color.primary)
+    }
+}
+
+/// How long the recording has been running - or, once the activity has gone stale, that it is not
+/// running any more. A stale activity must not keep counting: the count is SwiftUI's own and would
+/// go on for as long as the banner is on the Lock Screen, long after the app that fed it is gone.
+private struct ElapsedTime: View {
+    let startedAt: Date
+    let isStale: Bool
+
+    var body: some View {
+        if isStale {
+            Text("not updating")
+                .lineLimit(2)
+                .minimumScaleFactor(0.7)
+        } else {
+            Text(timerInterval: startedAt...Date.distantFuture, countsDown: false)
+                .monospacedDigit()
+                .lineLimit(1)
+                // rather than truncating once the survey has been running for over an hour
+                .minimumScaleFactor(0.7)
+        }
     }
 }
 

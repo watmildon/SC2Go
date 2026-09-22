@@ -22,6 +22,19 @@ final class TrackRecordingLiveActivityController {
     /// available from 16.2 and a stored property cannot carry an availability annotation.
     private var activity: Any?
 
+    /// Whether starting an activity for the current recording has already been refused, so that
+    /// it is not attempted again until the next one. Recording runs for hours in the background,
+    /// where ActivityKit rejects a request outright, and a snapshot arrives every five seconds:
+    /// retrying each time would be thousands of doomed requests and log lines per survey.
+    private var activityRequestFailed = false
+
+    /// How long after an update the activity is to be shown as out of date. The app is updating
+    /// it at most every five seconds, so anything approaching this means it has stopped - it was
+    /// killed while in the background, most likely - and the widget then says so rather than
+    /// counting a walk up that nobody is recording. Not shorter, because iOS also throttles
+    /// updates from a backgrounded app.
+    private static let staleAfter: TimeInterval = 120
+
     private init() {}
 
     /// Called once from iOSApp.init, after doInitApp() has started Koin - the bridge resolves the
@@ -39,6 +52,8 @@ final class TrackRecordingLiveActivityController {
         guard #available(iOS 16.2, *) else { return }
         guard let snapshot else {
             end()
+            // the next recording gets a fresh attempt: the user may have turned them back on
+            activityRequestFailed = false
             return
         }
         let state = TrackRecordingAttributes.ContentState(
@@ -51,7 +66,10 @@ final class TrackRecordingLiveActivityController {
                 : nil,
             startedAt: Date(timeIntervalSince1970: Double(snapshot.startedAtEpochMillis) / 1000)
         )
-        let content = ActivityContent(state: state, staleDate: nil)
+        let content = ActivityContent(
+            state: state,
+            staleDate: Date().addingTimeInterval(Self.staleAfter)
+        )
         if let activity = activity as? Activity<TrackRecordingAttributes> {
             Task { await activity.update(content) }
             return
@@ -59,6 +77,7 @@ final class TrackRecordingLiveActivityController {
         // the user can turn Live Activities off for the app; recording still works, it just shows
         // nothing, so this is not worth reporting anywhere
         guard ActivityAuthorizationInfo().areActivitiesEnabled else { return }
+        guard !activityRequestFailed else { return }
         do {
             activity = try Activity.request(
                 attributes: TrackRecordingAttributes(),
@@ -66,6 +85,9 @@ final class TrackRecordingLiveActivityController {
                 pushType: nil
             )
         } catch {
+            // once per recording, see activityRequestFailed: a request from the background is
+            // refused, and that is where most of this recording will be spent
+            activityRequestFailed = true
             NSLog("Could not start the track recording Live Activity: \(error)")
         }
     }
