@@ -80,13 +80,13 @@ class IosRecordingLocationProvider(
         manager.distanceFilter = request.minimumDistance.toDouble(International.Meters)
         manager.configureForRecording()
         manager.startUpdatingLocation()
-        awaitClose {
-            manager.stopUpdatingLocation()
-            /* explicitly, unlike maplibre: with allowsBackgroundLocationUpdates set, a manager
-               that is still referenced by a delegate that is still referenced by a cancelled
-               flow is exactly the kind of thing that keeps the location indicator on */
-            manager.delegate = null
-        }
+        /* Through the delegate, not two lines here, because this closure is the ONLY thing
+           keeping the delegate alive: `CLLocationManager.delegate` is a weak reference, so a
+           delegate nothing else refers to is collected as soon as this flow suspends, and from
+           then on the manager delivers nothing. The symptom is a stream that produces one fix and
+           then falls silent for good - a recording that is a single point, and a map that stops
+           following. maplibre's provider is shaped the same way for the same reason. */
+        awaitClose { delegate.stop(manager) }
     }.flowOn(Dispatchers.Main)
 
     private class Delegate(
@@ -105,6 +105,12 @@ class IosRecordingLocationProvider(
                     measurementMark = TimeSource.Monotonic.markNow() - location.ageAtReceipt(),
                 ))
             }
+        }
+
+        /** Stops [manager] and detaches from it. See the call site for why it is a method here. */
+        fun stop(manager: CLLocationManager) {
+            manager.stopUpdatingLocation()
+            manager.delegate = null
         }
 
         override fun locationManager(manager: CLLocationManager, didFailWithError: NSError) {
