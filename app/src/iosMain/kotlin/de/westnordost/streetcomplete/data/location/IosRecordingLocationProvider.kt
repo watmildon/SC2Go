@@ -24,6 +24,7 @@ import platform.CoreLocation.kCLErrorDenied
 import platform.CoreLocation.kCLErrorDomain
 import platform.CoreLocation.kCLErrorLocationUnknown
 import platform.CoreLocation.kCLErrorNetwork
+import platform.CoreLocation.kCLErrorPromptDeclined
 import platform.CoreLocation.kCLLocationAccuracyBest
 import platform.CoreLocation.kCLLocationAccuracyBestForNavigation
 import platform.CoreLocation.kCLLocationAccuracyHundredMeters
@@ -137,6 +138,8 @@ class IosRecordingLocationProvider(
                 } else {
                     LocationUnavailableReason.ServicesDisabled
                 }
+            // the user dismissed the permission prompt - maplibre maps code 18 the same way
+            code == kCLErrorPromptDeclined -> LocationUnavailableReason.PermissionDenied
             /* no fix yet, or none for a while - routine in a tunnel, and not a reason to stop.
                maplibre's mapper treats kCLErrorNetwork the same way (verified against the 0.16.0
                klib: its `asUnavailableReason` matches codes 0 and 2), and so must this one, or
