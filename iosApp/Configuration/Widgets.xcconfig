@@ -1,0 +1,26 @@
+// The widget extension's identity. Committed, like Version.xcconfig and for the same reason: the
+// only thing that may not be committed is the signing identity, which comes in through the
+// #include below - Config.xcconfig is the local, skip-worktree file that carries TEAM_ID.
+//
+// Including Version.xcconfig (which itself includes Config.xcconfig) also brings the version
+// numbers over: an app extension's CFBundleShortVersionString and CFBundleVersion have to match
+// the app's, or the App Store rejects the upload.
+#include "Version.xcconfig"
+
+// Later assignments win in an xcconfig, so these override what came in above.
+PRODUCT_NAME=SC2GoWidgets
+
+// Must differ from the app's, which Config.xcconfig sets to iosApp: two targets in one project
+// with the same module name both write <name>.swiftmodule into the build products directory, and
+// the build fails with "Multiple commands produce ...".
+PRODUCT_MODULE_NAME=SC2GoWidgets
+
+// Must be the app's bundle identifier with a suffix - iOS only loads an extension whose id is
+// prefixed by its container app's. The app's own id lives in the local Config.xcconfig, so this
+// cannot be derived from it in a committed file; if the app is ever renamed, this follows by hand.
+PRODUCT_BUNDLE_IDENTIFIER=com.watmildon.sc2go.widgets
+
+// Live Activities in the Dynamic Island want 16.2, but ActivityConfiguration's current API and
+// the containers the Island expands into are 17.0. The app itself still deploys 15.0 and gates
+// everything ActivityKit behind #available; only this target needs a newer floor.
+IPHONEOS_DEPLOYMENT_TARGET=17.0

@@ -9,7 +9,18 @@
     <key>UIBackgroundModes</key>
     <array>
         <string>processing</string>
+        <!-- Keeps the location updates coming while a track is being recorded and the app is not
+             in the foreground; without it iOS stops them and the recorded trace has a hole in it
+             wherever the user put the phone in their pocket. Only the recording session asks for
+             background updates (IosRecordingLocationProvider) - the map's own location does not,
+             so nothing keeps the GPS alive when no recording is running. -->
+        <string>location</string>
     </array>
+
+    <!-- The Live Activity shown while a track is being recorded. Drawn by the SC2GoWidgets
+         extension; see TrackRecordingLiveActivity.swift on either side. -->
+    <key>NSSupportsLiveActivities</key>
+    <true/>
 
 	<key>CADisableMinimumFrameDurationOnPhone</key>
     <true/>
