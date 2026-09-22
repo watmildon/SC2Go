@@ -15,6 +15,8 @@ import de.westnordost.streetcomplete.data.connection.IosActiveNetworkConnection
 import de.westnordost.streetcomplete.data.download.DownloadController
 import de.westnordost.streetcomplete.data.download.IosDownloadController
 import de.westnordost.streetcomplete.data.initialize
+import de.westnordost.streetcomplete.data.location.IosRecordingLocationProvider
+import de.westnordost.streetcomplete.data.location.RECORDING_LOCATION_PROVIDER
 import de.westnordost.streetcomplete.data.maptiles.IosMapTilesDownloader
 import de.westnordost.streetcomplete.data.maptiles.MapTilesDownloader
 import de.westnordost.streetcomplete.data.power.IosPowerSaveSource
@@ -113,8 +115,20 @@ val iosModule = module {
 
     // location
 
-    factory<LocationProvider> { IosLocationProvider() }
+    /* A single, where upstream has a factory: IosRecordingLocationProvider below forwards the
+       permission handling to this one rather than reimplementing it, and a factory would hand it
+       a second IosLocationProvider with a second permission requester of its own. Nothing else on
+       iOS resolves this - only LocationUpdatesSource does, and it is a single too - so making it
+       one changes nothing else, and it finally gets closed. */
+    single<LocationProvider> { IosLocationProvider() } onClose { it?.close() }
+
+    /* What LocationUpdatesSource switches to while a track is being recorded, so that the fixes
+       keep coming while the app is in the background. Registered under a name because the source
+       is built in CommonModule and Android has no such provider; see RECORDING_LOCATION_PROVIDER. */
+    single<LocationProvider>(named(RECORDING_LOCATION_PROVIDER)) { IosRecordingLocationProvider(get()) }
+
     factory<SystemSettingsLauncher> { IosSystemSettingsLauncher() }
+
 
     // settings
 

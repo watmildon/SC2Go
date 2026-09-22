@@ -19,6 +19,7 @@ import de.westnordost.streetcomplete.data.edithistory.EditHistoryController
 import de.westnordost.streetcomplete.data.edithistory.EditHistorySource
 import de.westnordost.streetcomplete.data.location.LocationRequestSettings
 import de.westnordost.streetcomplete.data.location.LocationUpdatesSource
+import de.westnordost.streetcomplete.data.location.RECORDING_LOCATION_PROVIDER
 import de.westnordost.streetcomplete.data.location.SurveyChecker
 import de.westnordost.streetcomplete.data.logs.LogsController
 import de.westnordost.streetcomplete.data.logs.LogsDao
@@ -496,7 +497,10 @@ val commonModule = module {
             get(),
             get<LowPowerMode>().isActive.map { lowPower ->
                 LocationRequestSettings.forMode(flags, lowPower, flagDistanceGiven)
-            }
+            },
+            /* getOrNull, not get: only iOS registers one (see RECORDING_LOCATION_PROVIDER), and
+               on Android the source is simply told there is no background-capable provider. */
+            getOrNull(named(RECORDING_LOCATION_PROVIDER)),
         )
     }
 

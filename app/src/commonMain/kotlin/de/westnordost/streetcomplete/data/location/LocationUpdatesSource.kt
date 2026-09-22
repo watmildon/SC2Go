@@ -55,6 +55,14 @@ import kotlin.time.Duration.Companion.seconds
 class LocationUpdatesSource(
     private val locationProvider: LocationProvider,
     settings: Flow<LocationRequestSettings>,
+    /** The provider to use instead of [locationProvider] while a track is being recorded, or null
+     *  where there is none. Null on Android, where nothing keeps location alive in the background
+     *  yet; on iOS it is the `IosRecordingLocationProvider`, which does.
+     *
+     *  Only one of the two is ever collected at a time - the switch below cancels the collection
+     *  of the other, which is what stops its `CLLocationManager` - so this does not undo the one
+     *  manager the whole class exists to guarantee. */
+    private val recordingLocationProvider: LocationProvider? = null,
 ) {
     private val scope = CoroutineScope(
         SupervisorJob() +
@@ -85,9 +93,15 @@ class LocationUpdatesSource(
     val updates: SharedFlow<LocationEvent> =
         /* the permission is part of what restarts the manager: a manager started while permission
            was still to be granted has only ever reported the denial */
-        combine(request, locationProvider.permission) { request, permission -> request to permission }
+        combine(request, locationProvider.permission, isRecordingTracks) { request, permission, recording ->
+            Triple(request, permission, recording)
+        }
             .distinctUntilChanged()
-            .flatMapLatest { (request, _) -> locationProvider.updates(request) }
+            /* Recording is part of what restarts the manager in its own right, not only through
+               the request it shapes: with settings that already ask for High and the dense filter
+               - the defaults - [createRequest] returns the very same request whether recording or
+               not, so nothing else here would notice that the provider has to change. */
+            .flatMapLatest { (request, _, recording) -> providerFor(recording).updates(request) }
             .filterNot { it.isStaleFix() }
             /* An exception out of the provider - as opposed to an Unavailable event, which is how
                it reports problems it expects - would otherwise end the sharing coroutine for good:
@@ -107,6 +121,12 @@ class LocationUpdatesSource(
                 ),
                 replay = 1,
             )
+
+    /** Which provider delivers the fixes. The recording one only while recording, and only where
+     *  there is one: it is what keeps the stream alive while the app is in the background, and
+     *  that is a cost the user opted into by pressing record. */
+    private fun providerFor(recordingTracks: Boolean): LocationProvider =
+        if (recordingTracks) recordingLocationProvider ?: locationProvider else locationProvider
 
     private fun LocationEvent.isStaleFix(): Boolean =
         this is LocationEvent.Update && measurementMark.elapsedNow() > MAX_REPLAYED_FIX_AGE
@@ -157,6 +177,14 @@ class LocationUpdatesSource(
         )
     }
 }
+
+/** The Koin name [LocationUpdatesSource]'s recording provider is registered under.
+ *
+ *  A qualified binding rather than a constructor argument somewhere platform-specific, because
+ *  the source is built in `CommonModule` and only one platform has such a provider: iOS registers
+ *  it, Android does not, and `getOrNull` then hands over null there without either side knowing
+ *  about the other. */
+const val RECORDING_LOCATION_PROVIDER = "RecordingLocationProvider"
 
 /** What the location request asks for when nothing overrides it */
 data class LocationRequestSettings(
