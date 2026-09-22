@@ -349,9 +349,15 @@ fun IosMainScreen() {
        While recording, the recorder's points are drawn instead of this screen's, so that coming
        back to the foreground shows the stretch walked while it was in the background rather than
        a line that stops where the app was last looked at. */
-    val recordedTrack = recordingSession?.trackpoints
-    val trackPositions = remember(track.size, recordedTrack?.size) {
-        (recordedTrack ?: track).map { it.position }
+    val recordedTrackpointCount = recordingSession?.trackpointCount
+    val trackPositions = remember(track.size, recordedTrackpointCount) {
+        /* the count is the key, because the recorder keeps the points themselves in a list it
+           appends to in place - there is no new list per fix to key on any more */
+        if (recordedTrackpointCount != null) {
+            trackRecorder.trackpoints().map { it.position }
+        } else {
+            track.map { it.position }
+        }
     }
     val oldTrackPositions = remember(oldTracks.size) {
         oldTracks.map { stretch -> stretch.map { it.position } }

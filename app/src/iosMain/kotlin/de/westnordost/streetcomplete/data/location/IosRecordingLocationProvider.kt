@@ -23,6 +23,7 @@ import platform.CoreLocation.CLLocationManagerDelegateProtocol
 import platform.CoreLocation.kCLErrorDenied
 import platform.CoreLocation.kCLErrorDomain
 import platform.CoreLocation.kCLErrorLocationUnknown
+import platform.CoreLocation.kCLErrorNetwork
 import platform.CoreLocation.kCLLocationAccuracyBest
 import platform.CoreLocation.kCLLocationAccuracyBestForNavigation
 import platform.CoreLocation.kCLLocationAccuracyHundredMeters
@@ -136,8 +137,13 @@ class IosRecordingLocationProvider(
                 } else {
                     LocationUnavailableReason.ServicesDisabled
                 }
-            // no fix yet, or none for a while - routine in a tunnel, and not a reason to stop
-            code == kCLErrorLocationUnknown -> LocationUnavailableReason.TemporarilyUnavailable
+            /* no fix yet, or none for a while - routine in a tunnel, and not a reason to stop.
+               maplibre's mapper treats kCLErrorNetwork the same way (verified against the 0.16.0
+               klib: its `asUnavailableReason` matches codes 0 and 2), and so must this one, or
+               the same trip through a dead spot would read as a permanent failure on the main
+               screen depending only on which provider happened to be collecting. */
+            code == kCLErrorLocationUnknown || code == kCLErrorNetwork ->
+                LocationUnavailableReason.TemporarilyUnavailable
             else -> LocationUnavailableReason.UnexpectedFailure
         }
     }

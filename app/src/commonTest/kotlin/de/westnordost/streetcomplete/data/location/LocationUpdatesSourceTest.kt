@@ -11,6 +11,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.withTimeoutOrNull
 import org.maplibre.compose.location.LocationAccuracy
 import org.maplibre.compose.location.LocationAccuracyAuthorization
 import org.maplibre.compose.location.LocationEvent
@@ -27,8 +28,10 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertIs
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlin.time.Duration
+import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 import kotlin.time.Instant
 import kotlin.time.TimeSource
@@ -207,6 +210,53 @@ class LocationUpdatesSourceTest {
 
         val fix = assertIs<LocationEvent.Update>(first)
         assertTrue(fix.measurementMark.elapsedNow() < 30.seconds, "the stale fix came through")
+    }
+
+    /* ------------------------------ which provider is used ---------------------------------- */
+
+    /** While a track is being recorded the fixes come from the background-capable provider, and
+     *  from that one alone: two live `CLLocationManager`s in a process is exactly what the shared
+     *  stream exists to prevent, and iOS would coalesce them to the more aggressive request. */
+    @Test fun recordingSwitchesToTheRecordingProviderAndBack() = runBlocking {
+        val normal = RecordingLocationProvider(granted)
+        val recording = RecordingLocationProvider(granted)
+        val source = LocationUpdatesSource(normal, flowOf(LocationRequestSettings()), recording)
+        val collector = launch { source.updates.collect {} }
+        normal.calls.first { it.size == 1 }
+
+        source.isRecordingTracks.value = true
+
+        withTimeout(5.seconds) { recording.calls.first { it.size == 1 } }
+        withTimeout(5.seconds) { normal.calls.value[0].cancelled.first { it } }
+        assertFalse(recording.calls.value[0].cancelled.value, "both providers were collected at once")
+
+        source.isRecordingTracks.value = false
+
+        withTimeout(5.seconds) { normal.calls.first { it.size == 2 } }
+        withTimeout(5.seconds) { recording.calls.value[0].cancelled.first { it } }
+        assertFalse(normal.calls.value[1].cancelled.value, "both providers were collected at once")
+        assertEquals(1, recording.calls.value.size, "the recording provider was started again")
+        collector.cancel()
+    }
+
+    /** Android has no recording provider, so a recording changes nothing about where the fixes
+     *  come from - and must not cost a restart of the location manager. */
+    @Test fun recordingWithoutARecordingProviderDoesNotRestartTheManager() = runBlocking {
+        val provider = RecordingLocationProvider(granted)
+        // High and the dense filter already, so that createRequest returns the same request either way
+        val settings = LocationRequestSettings(LocationAccuracy.High, 1.meters)
+        val source = LocationUpdatesSource(provider, flowOf(settings))
+        val collector = launch { source.updates.collect {} }
+        provider.calls.first { it.size == 1 }
+
+        source.isRecordingTracks.value = true
+
+        assertNull(
+            withTimeoutOrNull(500.milliseconds) { provider.calls.first { it.size == 2 } },
+            "the manager was restarted although nothing about it changed",
+        )
+        assertFalse(provider.calls.value[0].cancelled.value, "the manager was stopped for nothing")
+        collector.cancel()
     }
 
     private val granted = LocationPermission.Granted(LocationAccuracyAuthorization.Precise)

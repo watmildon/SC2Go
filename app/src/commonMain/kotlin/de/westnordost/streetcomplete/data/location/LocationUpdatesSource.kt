@@ -15,6 +15,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filterNot
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.retryWhen
 import kotlinx.coroutines.flow.shareIn
 import org.maplibre.compose.location.LocationAccuracy
@@ -85,6 +86,15 @@ class LocationUpdatesSource(
             createRequest(settings, recordingTracks, navigationMode)
         }.distinctUntilChanged()
 
+    /** Whether the fixes are to come from [recordingLocationProvider] rather than from
+     *  [locationProvider], which is what a recording changes about the stream beyond the request.
+     *
+     *  Derived rather than [isRecordingTracks] itself, because this - not the recording - is what
+     *  the manager has to be restarted for. Where there is no recording provider, i.e. on Android,
+     *  it is constantly false and starting or stopping a recording restarts nothing. */
+    private val usesRecordingProvider: Flow<Boolean> =
+        if (recordingLocationProvider != null) isRecordingTracks else flowOf(false)
+
     /** The location events, one manager shared by every collector. Replays the last event to a
      *  new collector while the stream is running; when the last collector leaves, the manager is
      *  stopped after a short grace period and the replay cache is cleared with it, so nothing
@@ -93,15 +103,16 @@ class LocationUpdatesSource(
     val updates: SharedFlow<LocationEvent> =
         /* the permission is part of what restarts the manager: a manager started while permission
            was still to be granted has only ever reported the denial */
-        combine(request, locationProvider.permission, isRecordingTracks) { request, permission, recording ->
-            Triple(request, permission, recording)
+        combine(request, locationProvider.permission, usesRecordingProvider) { request, permission, recordingProvider ->
+            Triple(request, permission, recordingProvider)
         }
             .distinctUntilChanged()
-            /* Recording is part of what restarts the manager in its own right, not only through
-               the request it shapes: with settings that already ask for High and the dense filter
-               - the defaults - [createRequest] returns the very same request whether recording or
-               not, so nothing else here would notice that the provider has to change. */
-            .flatMapLatest { (request, _, recording) -> providerFor(recording).updates(request) }
+            /* Which of the two providers it is restarts the manager in its own right, not only
+               through the request a recording shapes: with settings that already ask for High and
+               the dense filter - the defaults - [createRequest] returns the very same request
+               whether recording or not, so nothing else here would notice that the provider has to
+               change. */
+            .flatMapLatest { (request, _, recordingProvider) -> providerFor(recordingProvider).updates(request) }
             .filterNot { it.isStaleFix() }
             /* An exception out of the provider - as opposed to an Unavailable event, which is how
                it reports problems it expects - would otherwise end the sharing coroutine for good:
@@ -122,11 +133,11 @@ class LocationUpdatesSource(
                 replay = 1,
             )
 
-    /** Which provider delivers the fixes. The recording one only while recording, and only where
-     *  there is one: it is what keeps the stream alive while the app is in the background, and
-     *  that is a cost the user opted into by pressing record. */
-    private fun providerFor(recordingTracks: Boolean): LocationProvider =
-        if (recordingTracks) recordingLocationProvider ?: locationProvider else locationProvider
+    /** Which provider delivers the fixes, for a [usesRecordingProvider] value that is only ever
+     *  true where there is a recording provider. That one is what keeps the stream alive while the
+     *  app is in the background, and that is a cost the user opted into by pressing record. */
+    private fun providerFor(useRecordingProvider: Boolean): LocationProvider =
+        if (useRecordingProvider) recordingLocationProvider ?: locationProvider else locationProvider
 
     private fun LocationEvent.isStaleFix(): Boolean =
         this is LocationEvent.Update && measurementMark.elapsedNow() > MAX_REPLAYED_FIX_AGE
