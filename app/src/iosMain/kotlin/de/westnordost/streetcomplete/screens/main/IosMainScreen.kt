@@ -566,6 +566,21 @@ fun IosMainScreen() {
         viewModel.isRecordingTracks.value = true
     }
 
+    /** What ends a recording on this screen once the recorder has handed over [recorded]: the
+     *  flag and the drawn line. Shared by the stop button and by a recording that ended on its
+     *  own, see the effect below; whichever of the two gets here second finds the flag already
+     *  cleared and does nothing, so the trace cannot be handed over twice. */
+    fun endTrackRecording(recorded: List<Trackpoint>) {
+        if (!viewModel.isRecordingTracks.value) return
+        viewModel.isRecordingTracks.value = false
+        /* The recorder's trace becomes the old stretch, not this screen's [track]: that one holds
+           only the fixes that arrived while the app was in the foreground, with every backgrounded
+           stretch collapsed into one straight line, and rolling it over as startNewTrack does would
+           draw a walk with most of it missing. The bearing lookback starts afresh either way. */
+        if (recorded.isNotEmpty()) oldTracks.add(recorded)
+        track.clear()
+    }
+
     fun stopTrackRecording() {
         /* Before anything is changed. Stopping opens a note with the track attached - that is the
            whole point of recording one - and with no fix there is nowhere to put the note, so
@@ -580,12 +595,37 @@ fun IosMainScreen() {
            move all but the bearing lookback into the old stretches. That no longer decides what
            the note gets, but the drawn line would still jump. */
         val recorded = trackRecorder.stop()
-        viewModel.isRecordingTracks.value = false
-        startNewTrack()
+        endTrackRecording(recorded)
         mainBottomSheetViewModel.showCreateNote(recorded.takeIf { it.isNotEmpty() })
         scope.launch {
             cameraState.animateTo(cameraState.position, Duration.ZERO)
             cameraState.moveTo(position, formCrosshairOffset, windowInfo.containerDpSize)
+        }
+    }
+
+    /* The recorder is the source of truth for whether a recording is running; the flag is this
+       screen's mirror of it, and the mirror is what the stop button and the location stream read.
+       A recording that dies on its own - its collector failing, see IosTrackRecorder.start - nulls
+       the session, and without this the button would keep showing a recording that nothing is
+       recording any more while the user pockets the phone. The points up to the failure are still
+       in the recorder, so they go into a note the same as on a stop. An ordinary stop nulls the
+       session too, but has cleared the flag by the time this sees it, so it is a no-op then. */
+    LaunchedEffect(trackRecorder) {
+        trackRecorder.session.collect { session ->
+            if (session == null && viewModel.isRecordingTracks.value) {
+                val recorded = trackRecorder.stop()
+                endTrackRecording(recorded)
+                /* Into a note as on a stop, but only if there is a trace and nothing is open: a
+                   recording that failed underneath a half-answered quest form must not throw the
+                   form away, and an empty note sheet appearing out of nowhere would explain
+                   nothing. Placed where the recording ended rather than wherever the crosshair
+                   happens to be, which is what the stop button does with the current fix. */
+                if (recorded.isNotEmpty() && mainBottomSheetViewModel.shownBottomSheet.value == null) {
+                    mainBottomSheetViewModel.showCreateNote(recorded)
+                    cameraState.animateTo(cameraState.position, Duration.ZERO)
+                    cameraState.moveTo(recorded.last().position, formCrosshairOffset, windowInfo.containerDpSize)
+                }
+            }
         }
     }
 
