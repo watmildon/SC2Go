@@ -7,9 +7,10 @@ import Foundation
 // extension must not link the Kotlin framework (155 MB, static), so everything it draws has to
 // arrive as a plain value in here.
 //
-// Available from 16.2 rather than ActivityKit's own 16.1, because that is the first version with
-// the ActivityContent API the app uses to push updates.
-@available(iOS 16.2, *)
+// Available from 17.0, matching the widget extension's deployment target: the app requests an
+// activity only on 17.0 and up (see TrackRecordingLiveActivityController), because on 16.x
+// ActivityKit would accept the request and the extension that draws it would not be loaded.
+@available(iOS 17.0, *)
 struct TrackRecordingAttributes: ActivityAttributes {
     // Nothing fixed for the life of the activity: everything about a recording changes as it runs.
     public struct ContentState: Codable, Hashable {

@@ -20,7 +20,9 @@ PRODUCT_MODULE_NAME=SC2GoWidgets
 // cannot be derived from it in a committed file; if the app is ever renamed, this follows by hand.
 PRODUCT_BUNDLE_IDENTIFIER=com.watmildon.sc2go.widgets
 
-// Live Activities in the Dynamic Island want 16.2, but ActivityConfiguration's current API and
-// the containers the Island expands into are 17.0. The app itself still deploys 15.0 and gates
-// everything ActivityKit behind #available; only this target needs a newer floor.
+// Live Activities exist from 16.1; context.isStale, which this extension uses, needs 16.2, and
+// nothing here needs more. 17.0 is what it was built and verified against. The app itself still
+// deploys 15.0 and requests an activity only on 17.0 and up (see TrackRecordingLiveActivity.swift
+// in the app), because an activity requested where this extension cannot load draws nothing. If
+// this floor is lowered, lower the app's #available gates with it.
 IPHONEOS_DEPLOYMENT_TARGET=17.0

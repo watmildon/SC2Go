@@ -51,9 +51,16 @@ struct TrackRecordingLiveActivity: Widget {
                 Image(systemName: context.isStale ? "exclamationmark.triangle" : "record.circle")
                     .foregroundStyle(context.isStale ? Color.secondary : Color.red)
             } compactTrailing: {
-                Label("\(context.state.nearbyQuestCount)", systemImage: "mappin.and.ellipse")
-                    .font(.caption)
-                    .foregroundStyle(context.isStale ? Color.secondary : Color.primary)
+                // an HStack rather than a Label: the compact slot is a few points wide, and a
+                // Label's default icon spacing truncates a two-digit count to "..."
+                HStack(spacing: 2) {
+                    Image(systemName: "mappin.and.ellipse")
+                    Text("\(context.state.nearbyQuestCount)")
+                        .monospacedDigit()
+                        .minimumScaleFactor(0.8)
+                }
+                .font(.caption)
+                .foregroundStyle(context.isStale ? Color.secondary : Color.primary)
             } minimal: {
                 // the count alone, greyed, would be indistinguishable from a live one at this size
                 if context.isStale {
