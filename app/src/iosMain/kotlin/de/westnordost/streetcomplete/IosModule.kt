@@ -16,12 +16,14 @@ import de.westnordost.streetcomplete.data.download.DownloadController
 import de.westnordost.streetcomplete.data.download.IosDownloadController
 import de.westnordost.streetcomplete.data.initialize
 import de.westnordost.streetcomplete.data.location.IosRecordingLocationProvider
+import de.westnordost.streetcomplete.data.location.LocationUpdatesSource
 import de.westnordost.streetcomplete.data.location.RECORDING_LOCATION_PROVIDER
 import de.westnordost.streetcomplete.data.maptiles.IosMapTilesDownloader
 import de.westnordost.streetcomplete.data.maptiles.MapTilesDownloader
 import de.westnordost.streetcomplete.data.osmtracks.IosTrackRecorder
 import de.westnordost.streetcomplete.data.power.IosPowerSaveSource
 import de.westnordost.streetcomplete.data.power.PowerSaveSource
+import de.westnordost.streetcomplete.data.quest.VisibleQuestsSource
 import de.westnordost.streetcomplete.data.upload.IosUploadController
 import de.westnordost.streetcomplete.data.upload.UploadController
 import de.westnordost.streetcomplete.screens.about.AppStoreInfo
@@ -133,8 +135,12 @@ val iosModule = module {
     // track recording
 
     /* A single, not something the main screen owns: a recording keeps running while the app is in
-       the background, which is the whole point of it. See IosTrackRecorder. */
-    single { IosTrackRecorder(get(), get()) }
+       the background, which is the whole point of it. See IosTrackRecorder.
+
+       Lazy dependencies, because this is resolved from iOSApp.init (the Live Activity bridge
+       observes it from launch) and LocationUpdatesSource must not be built before the IosApp
+       composable has parsed the GPS launch flags - see its binding in CommonModule. */
+    single { IosTrackRecorder(lazy { get<LocationUpdatesSource>() }, lazy { get<VisibleQuestsSource>() }) }
 
     // settings
 

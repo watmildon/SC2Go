@@ -16,9 +16,11 @@ import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineName
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.IO
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -28,6 +30,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.supervisorScope
 import kotlinx.coroutines.withContext
+import org.jetbrains.compose.resources.ResourceEnvironment
 import org.jetbrains.compose.resources.getString
 import org.jetbrains.compose.resources.getSystemResourceEnvironment
 import org.maplibre.compose.location.LocationEvent
@@ -50,9 +53,18 @@ import org.maplibre.compose.location.LocationEvent
  *  off the collector, so a slow query cannot hold up the shared location stream that the map is
  *  collecting from as well. */
 class IosTrackRecorder(
-    private val locationUpdatesSource: LocationUpdatesSource,
-    private val visibleQuestsSource: VisibleQuestsSource,
+    /* Lazy, both of them, because this is resolved from iOSApp.init - the Live Activity bridge
+       observes it from the moment the app starts - and LocationUpdatesSource reads the GPS launch
+       flags once, when it is constructed, which is only correct after the IosApp composable has
+       parsed them (see the comment at its binding in CommonModule). Resolving it here eagerly
+       would silently build it with the defaults, and take a CLLocationManager and the quest
+       source along into a headless BGTask launch. Nothing is needed until start(). */
+    locationUpdatesSource: Lazy<LocationUpdatesSource>,
+    visibleQuestsSource: Lazy<VisibleQuestsSource>,
 ) {
+    private val locationUpdatesSource by locationUpdatesSource
+    private val visibleQuestsSource by visibleQuestsSource
+
     /** Owns its scope, the way [LocationUpdatesSource] does: it lives as long as the process, and
      *  there is nothing on iOS to cancel it in. What is started and stopped per recording is
      *  [recordingJob], not this. */
@@ -70,6 +82,14 @@ class IosTrackRecorder(
     val session: StateFlow<TrackRecordingSession?> = _session.asStateFlow()
 
     private var recordingJob: Job? = null
+
+    /** Which recording is the current one, counted up on every start. The fix collector carries
+     *  the value it was started with and compares it under [trackpointsLock] before appending: a
+     *  collector of a recording that has since been stopped, still mid-fix on its own dispatcher
+     *  when the next one was started, must not append that fix to the new recording. The session
+     *  alone cannot tell the two apart - it is non-null in both cases. Written under the lock,
+     *  read under the lock. */
+    private var generation = 0
 
     /** The points recorded so far, appended to in place.
      *
@@ -101,7 +121,16 @@ class IosTrackRecorder(
     /** Starts recording. Does nothing if a recording is already running. */
     fun start() {
         if (_session.value != null) return
-        trackpointsLock.withLock { trackpoints.clear() }
+        val thisGeneration = trackpointsLock.withLock {
+            trackpoints.clear()
+            ++generation
+        }
+        /* Resolved here, on the caller's (main) thread, rather than on first use inside the
+           coroutines below: both are lazy (see the constructor), and were this the first
+           resolution, LocationUpdatesSource - and maplibre's CLLocationManager with it - would be
+           built on a background thread. */
+        val updates = locationUpdatesSource.updates
+        val questsSource = visibleQuestsSource
         _session.value = TrackRecordingSession(startedAtEpochMillis = nowAsEpochMilliseconds())
         val job = scope.launch {
             /* supervisorScope so that the two cannot cancel one another: a failure in the count -
@@ -109,11 +138,11 @@ class IosTrackRecorder(
                fix collector down with it, i.e. silently end the recording while the stop button
                and the Live Activity carried on as if it were running. */
             supervisorScope {
-                launch { countNearbyQuests() }
+                launch { countNearbyQuests(questsSource, thisGeneration) }
                 /* the fix collector is the recording itself, so it is this coroutine rather than a
                    third child: when it ends there is nothing left to record, and the job ending is
                    what the handler below turns into the session ending. */
-                collectFixes()
+                collectFixes(updates, thisGeneration)
             }
         }
         recordingJob = job
@@ -145,7 +174,7 @@ class IosTrackRecorder(
      *  was already being turned into a trackpoint when this was called - can be lost. Which of the
      *  two gets the lock first decides whether it is in the returned list or nowhere; what cannot
      *  happen is that it leaks into the next recording, because the collector checks [session]
-     *  under the same lock. */
+     *  and [generation] under the same lock. */
     fun stop(): List<Trackpoint> {
         recordingJob?.cancel()
         recordingJob = null
@@ -162,10 +191,10 @@ class IosTrackRecorder(
         }
     }
 
-    private suspend fun collectFixes() {
+    private suspend fun collectFixes(updates: Flow<LocationEvent>, thisGeneration: Int) {
         var lastCountedAt: LatLon? = null
         var lastCountedAtMillis = 0L
-        locationUpdatesSource.updates.collect { event ->
+        updates.collect { event ->
             if (event !is LocationEvent.Update) {
                 /* Loud, because of what it can mean while recording: the shared stream restarting
                    - a permission change, or the provider throwing - while the app is in the
@@ -186,62 +215,76 @@ class IosTrackRecorder(
             /* elevation 0, exactly as the main screen records it: the shared Location type has no
                altitude, so every <ele> in the uploaded trace is 0.0 until it carries one. */
             val point = Trackpoint(location.position, now, location.accuracy, 0f)
-            val addedDistance = trackpointsLock.withLock {
-                // the recording ended while this fix was being processed, see stop()
-                if (_session.value == null) return@withLock null
-                val added = TrackRecordingStats.addedDistanceMeters(trackpoints.lastOrNull(), point)
+            /* Everything a fix changes happens under the one lock, after the one check: the
+               session's totals and the recount request as well as the point itself, so that a fix
+               of a recording that has just been stopped cannot bump the totals of the one started
+               in its place, or become the first position that one counts. */
+            trackpointsLock.withLock {
+                /* the recording ended while this fix was being processed, see stop() - and if
+                   another has been started since, this fix belongs to the ended one, not to it */
+                if (_session.value == null || generation != thisGeneration) return@collect
+                val addedDistance = TrackRecordingStats.addedDistanceMeters(trackpoints.lastOrNull(), point)
                 trackpoints.add(point)
-                added
-            } ?: return@collect
-            _session.update { session ->
-                session?.copy(
-                    trackpointCount = session.trackpointCount + 1,
-                    distanceMeters = session.distanceMeters + addedDistance,
-                )
-            }
-            /* No gap handling: a break in reception does not split a recorded track - the trace has
-               to stay whole - which is the same rule the main screen follows while recording, see
-               isTrackGap. A backgrounded stretch is not a gap here at all any more: that is the
-               point of the recording provider. */
-            if (TrackRecordingStats.shouldRecountNearbyQuests(lastCountedAt, lastCountedAtMillis, location.position, now)) {
-                lastCountedAt = location.position
-                lastCountedAtMillis = now
-                countNearbyQuestsAt.trySend(location.position)
+                _session.update { session ->
+                    session?.copy(
+                        trackpointCount = session.trackpointCount + 1,
+                        distanceMeters = session.distanceMeters + addedDistance,
+                    )
+                }
+                /* No gap handling: a break in reception does not split a recorded track - the trace
+                   has to stay whole - which is the same rule the main screen follows while
+                   recording, see isTrackGap. A backgrounded stretch is not a gap here at all any
+                   more: that is the point of the recording provider. */
+                if (TrackRecordingStats.shouldRecountNearbyQuests(lastCountedAt, lastCountedAtMillis, location.position, now)) {
+                    lastCountedAt = location.position
+                    lastCountedAtMillis = now
+                    countNearbyQuestsAt.trySend(location.position)
+                }
             }
         }
     }
 
-    private suspend fun countNearbyQuests() {
-        /* Resolved once, here, rather than letting the one-argument getString below resolve it per
-           count: working out which resources apply reads UIScreen.mainScreen and its trait
-           collection, which is UIKit and may only be touched on the main thread, while everything
-           in this class runs on Dispatchers.Default. Once means one hop to the main thread per
-           recording rather than one per count - and none at all in the common case of a recording
-           with no quest nearby. */
-        val resourceEnvironment = withContext(Dispatchers.Main) { getSystemResourceEnvironment() }
+    private suspend fun countNearbyQuests(questsSource: VisibleQuestsSource, thisGeneration: Int) {
+        /* Resolved once per recording, on the first count that needs a title, rather than letting
+           the one-argument getString below resolve it per count: working out which resources
+           apply reads UIScreen.mainScreen and its trait collection, which is UIKit and may only be
+           touched on the main thread, while everything in this class runs on Dispatchers.Default.
+           Once means one hop to the main thread per recording rather than one per count - and
+           none at all in the common case of a recording with no quest nearby. */
+        var resourceEnvironment: ResourceEnvironment? = null
         countNearbyQuestsAt.receiveAsFlow().collectLatest { position ->
             /* Per count, and not fatal: this is the number in the Live Activity, and a query that
                failed once - against a database the download is writing to underneath it - is no
                reason to stop recording the track, which is what the user actually pressed the
-               button for. The next fix tries again. */
+               button for. The next fix tries again. The environment lookup is inside the try for
+               the same reason: were it to throw once, up front, no count would ever be made. */
             try {
-                val nearby = withContext(Dispatchers.Default) {
+                /* IO, as the map's own pin source queries this on: a blocking database read, and
+                   Default is the pool the fix collector and everything else in here shares */
+                val nearby = withContext(Dispatchers.IO) {
                     /* a box, because that is what the quest source indexes by; the circle is cut
                        out of it afterwards. Its corners reach 1.4x the radius, so this over-reads
                        a little. */
-                    val quests = visibleQuestsSource.getAll(position.enclosingBoundingBox(NEARBY_RADIUS_METERS))
+                    val quests = questsSource.getAll(position.enclosingBoundingBox(NEARBY_RADIUS_METERS))
                     TrackRecordingStats.nearbyQuests(quests, position)
                 }
                 /* resolved here rather than in Swift: the quest titles are Compose resources in the
                    shared module, in the language the app is running in, and the widget extension does
                    not link the shared module at all - it only renders the strings it is handed. */
                 val nearest = nearby.nearest?.let {
+                    val environment = resourceEnvironment
+                        ?: withContext(Dispatchers.Main) { getSystemResourceEnvironment() }.also { resourceEnvironment = it }
                     NearbyQuest(
-                        getString(resourceEnvironment, it.type.title),
+                        getString(environment, it.type.title),
                         nearby.nearestDistanceMeters,
                     )
                 }
-                _session.update { it?.copy(nearbyQuestCount = nearby.count, nearestQuest = nearest) }
+                // under the lock and behind the check, for the same reason as in collectFixes
+                trackpointsLock.withLock {
+                    if (generation == thisGeneration) {
+                        _session.update { it?.copy(nearbyQuestCount = nearby.count, nearestQuest = nearest) }
+                    }
+                }
             } catch (e: CancellationException) {
                 // a newer position superseded this one, or the recording stopped: not a failure
                 throw e
