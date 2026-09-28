@@ -47,9 +47,11 @@ data class TrackRecordingSnapshot(
  *
  *  **Coalesced**: starting and stopping are reported at once, but while a recording runs no more
  *  than one update every [MIN_UPDATE_INTERVAL] is delivered, and only if something in the snapshot
- *  actually changed. An ActivityKit update is a system-wide render, and the one thing that would
- *  otherwise change on every single fix - the elapsed time - is not sent at all: the widget is
- *  given the start time and lets SwiftUI count up from it.
+ *  actually changed - except for a heartbeat every [HEARTBEAT_INTERVAL], which repeats the last
+ *  snapshot so that the activity never looks stale while the process is alive. An ActivityKit
+ *  update is a system-wide render, and the one thing that would otherwise change on every single
+ *  fix - the elapsed time - is not sent at all: the widget is given the start time and lets
+ *  SwiftUI count up from it.
  *
  *  @return a handle whose `close()` stops the reporting. Nothing in the app calls it today - the
  *  observation lasts as long as the process - but leaving no way to stop it would make this
@@ -82,6 +84,21 @@ fun observeTrackRecording(onChange: (TrackRecordingSnapshot?) -> Unit): TrackRec
                 lastSent = snapshot
                 lastSentAt = TimeSource.Monotonic.markNow()
                 onChange(snapshot)
+                /* Heartbeat: the same snapshot again every HEARTBEAT_INTERVAL for as long as
+                   nothing supersedes it. Swift stamps every delivery with a fresh stale date, and
+                   without this a recording that is alive but unchanging - the user standing still,
+                   or indoors where every fix fails the accuracy filter - would go stale on the
+                   Lock Screen after two minutes, because with the 1 m distance filter a standing
+                   user produces no fixes and so no new snapshot. A killed or suspended process
+                   stops the heartbeat too, so a real orphan still goes stale as intended. Only
+                   while recording: after a stop there is no activity to keep fresh. */
+                if (snapshot != null) {
+                    while (true) {
+                        delay(HEARTBEAT_INTERVAL)
+                        lastSentAt = TimeSource.Monotonic.markNow()
+                        onChange(snapshot)
+                    }
+                }
             }
     }
     return TrackRecordingObservation(scope)
@@ -112,3 +129,8 @@ private const val TAG = "TrackRecordingBridge"
 
 /** The most often the Live Activity is updated while a recording runs. */
 private val MIN_UPDATE_INTERVAL = 5.seconds
+
+/** How often an unchanged snapshot is re-sent while a recording runs, so that the activity's
+ *  stale date (two minutes, set on the Swift side) keeps being pushed out. Well inside it, so
+ *  that one delayed delivery does not tip the activity into stale. */
+private val HEARTBEAT_INTERVAL = 45.seconds
