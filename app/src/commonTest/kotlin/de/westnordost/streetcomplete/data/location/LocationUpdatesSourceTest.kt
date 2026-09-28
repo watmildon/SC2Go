@@ -228,13 +228,13 @@ class LocationUpdatesSourceTest {
 
         withTimeout(5.seconds) { recording.calls.first { it.size == 1 } }
         withTimeout(5.seconds) { normal.calls.value[0].cancelled.first { it } }
-        assertFalse(recording.calls.value[0].cancelled.value, "both providers were collected at once")
+        assertFalse(recording.calls.value[0].cancelled.value, "the recording provider's collection was cancelled while recording")
 
         source.isRecordingTracks.value = false
 
         withTimeout(5.seconds) { normal.calls.first { it.size == 2 } }
         withTimeout(5.seconds) { recording.calls.value[0].cancelled.first { it } }
-        assertFalse(normal.calls.value[1].cancelled.value, "both providers were collected at once")
+        assertFalse(normal.calls.value[1].cancelled.value, "the normal provider's collection was cancelled after recording stopped")
         assertEquals(1, recording.calls.value.size, "the recording provider was started again")
         collector.cancel()
     }
