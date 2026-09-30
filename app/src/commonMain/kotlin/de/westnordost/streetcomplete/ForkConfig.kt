@@ -105,18 +105,20 @@ object ForkConfig {
      *  stop a bad build of its own - and so that upstream cannot, which cuts both ways and is worth
      *  being deliberate about.
      *
-     *  Three things to know before relying on it. `banned_versions.txt` has to be on `main` in
-     *  watmildon/SC2Go *and pushed*. raw.githubusercontent.com is CDN-cached, so a ban takes a few
-     *  minutes to reach clients. And `VersionIsBannedChecker` swallows every exception and reports
-     *  "not banned", so a typo here, a renamed repository or branch, or an offline device all fail
-     *  open, silently - it is a courtesy brake, not a guarantee.
+     *  Three things to know before relying on it. `banned_versions.txt` has to be on `sc2go` in
+     *  watmildon/SC2Go *and pushed* (`main` there now tracks upstream and has no such file).
+     *  raw.githubusercontent.com is CDN-cached, so a ban takes a few minutes to reach clients. And
+     *  `VersionIsBannedChecker` swallows every exception and reports "not banned", so a typo here, a
+     *  renamed repository or branch, or an offline device all fail open, silently - it is a
+     *  courtesy brake, not a guarantee.
      *
      *  That last point has teeth: the repository was renamed from StreetComplete to SC2Go and the
      *  branch from master to main, and GitHub's redirect kept the old URL working, so nothing
      *  appeared to break. Those redirects stop the moment anyone creates a repository at the old
-     *  name. Rename either again and this URL must be changed with it. */
+     *  name. Rename either again and this URL must be changed with it. Builds made before the
+     *  product line moved from `main` to `sc2go` still read `main`, and fail open. */
     const val BANNED_VERSIONS_URL =
-        "https://raw.githubusercontent.com/watmildon/SC2Go/main/banned_versions.txt"
+        "https://raw.githubusercontent.com/watmildon/SC2Go/sc2go/banned_versions.txt"
 
     /** The `https` half of quest preset sharing links - the half that works when the recipient does
      *  not have the app installed, and so the one that appears in anything shared publicly. */
