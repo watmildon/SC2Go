@@ -1,9 +1,12 @@
-TEAM_ID=N7B5VD3487
+// personal team and own bundle id, so this installs beside the TestFlight app instead of over it
+TEAM_ID=VV5BKVAX73
 
 PRODUCT_NAME=StreetComplete
 // must differ from the Kotlin framework's name, which is also StreetComplete
 PRODUCT_MODULE_NAME=iosApp
-PRODUCT_BUNDLE_IDENTIFIER=app.streetcomplete
+PRODUCT_BUNDLE_IDENTIFIER=com.watmildon.streetcomplete.upstream
+// tells this build apart from the TestFlight app and SC2Go on the home screen
+INFOPLIST_KEY_CFBundleDisplayName=SC Upstream
 
 CURRENT_PROJECT_VERSION=6400
 MARKETING_VERSION=64.0.0
