@@ -1,6 +1,7 @@
 package de.westnordost.streetcomplete.screens.main.bottom_sheet
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -24,6 +25,7 @@ import de.westnordost.streetcomplete.screens.main.bottom_sheet.note.CreateNoteFo
 import de.westnordost.streetcomplete.screens.main.bottom_sheet.overlay.OverlayFormContainer
 import de.westnordost.streetcomplete.screens.main.bottom_sheet.quest.OsmQuestFormContainer
 import de.westnordost.streetcomplete.ui.common.dialogs.SurveyConfirmationDialog
+import de.westnordost.streetcomplete.ui.common.quest.LocalLastMapClick
 import de.westnordost.streetcomplete.ui.common.quest.MapClick
 import de.westnordost.streetcomplete.ui.common.quest.MapOverlayContent
 import de.westnordost.streetcomplete.ui.common.quest.Marker
@@ -59,43 +61,49 @@ fun MainBottomSheet(
 
     when (shownBottomSheet) {
         is ShownBottomSheet.CreateOsmNote -> {
-            CreateNoteForm(
-                onLeaveNote = { noteText, noteImagePaths, trackpoints ->
-                    onCreateNote(
-                        mapPosition,
-                        noteText,
-                        noteImagePaths,
-                        trackpoints
-                    )
-                    onSolved(Res.drawable.quest_create_note, mapPosition)
-                    onDismiss()
-                },
-                onDismiss = onDismiss,
-                trackpoints = shownBottomSheet.trackpoints,
-                modifier = modifier,
-            )
+            // the note forms are dismissed by a click on the map, see DismissFormHandler
+            CompositionLocalProvider(LocalLastMapClick provides lastMapClick) {
+                CreateNoteForm(
+                    onLeaveNote = { noteText, noteImagePaths, trackpoints ->
+                        onCreateNote(
+                            mapPosition,
+                            noteText,
+                            noteImagePaths,
+                            trackpoints
+                        )
+                        onSolved(Res.drawable.quest_create_note, mapPosition)
+                        onDismiss()
+                    },
+                    onDismiss = onDismiss,
+                    trackpoints = shownBottomSheet.trackpoints,
+                    modifier = modifier,
+                )
+            }
         }
         is ShownBottomSheet.OsmNoteQuest -> {
-            AddNoteCommentForm(
-                onDismiss = onDismiss,
-                onCommentNote = { noteText, noteImagePaths ->
-                    onCommentNote(
-                        shownBottomSheet.note,
-                        noteText,
-                        noteImagePaths
-                    )
-                    onSolved(shownBottomSheet.quest.type.icon, shownBottomSheet.quest.position)
-                    onDismiss()
-                },
-                onHideQuest = {
-                    val key = OsmNoteQuestKey(shownBottomSheet.note.id)
-                    onHideQuest(key)
-                    onDismiss()
-                },
-                quest = shownBottomSheet.quest,
-                note = shownBottomSheet.note,
-                modifier = modifier,
-            )
+            // the note forms are dismissed by a click on the map, see DismissFormHandler
+            CompositionLocalProvider(LocalLastMapClick provides lastMapClick) {
+                AddNoteCommentForm(
+                    onDismiss = onDismiss,
+                    onCommentNote = { noteText, noteImagePaths ->
+                        onCommentNote(
+                            shownBottomSheet.note,
+                            noteText,
+                            noteImagePaths
+                        )
+                        onSolved(shownBottomSheet.quest.type.icon, shownBottomSheet.quest.position)
+                        onDismiss()
+                    },
+                    onHideQuest = {
+                        val key = OsmNoteQuestKey(shownBottomSheet.note.id)
+                        onHideQuest(key)
+                        onDismiss()
+                    },
+                    quest = shownBottomSheet.quest,
+                    note = shownBottomSheet.note,
+                    modifier = modifier,
+                )
+            }
         }
         is ShownBottomSheet.OsmQuest -> {
             OsmQuestFormContainer(

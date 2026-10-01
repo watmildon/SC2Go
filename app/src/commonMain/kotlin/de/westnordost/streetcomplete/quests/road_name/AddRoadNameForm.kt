@@ -54,7 +54,9 @@ fun AddRoadNameForm(
         noNameConfirmationText = {
             Text(stringResource(Res.string.quest_streetName_answer_noName_confirmation_description))
         },
-        isResurvey = initialLocalizedNames != null && !copiedName
+        isResurvey = initialLocalizedNames != null && !copiedName,
+        // a click on the map is how one copies the name of a nearby road, not a dismissal
+        consumesMapClicks = true,
     )
 }
 

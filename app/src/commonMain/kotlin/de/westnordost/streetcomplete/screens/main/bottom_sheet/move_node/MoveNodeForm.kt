@@ -24,8 +24,8 @@ import de.westnordost.streetcomplete.data.osm.mapdata.LatLon
 import de.westnordost.streetcomplete.data.osm.mapdata.Node
 import de.westnordost.streetcomplete.resources.*
 import de.westnordost.streetcomplete.ui.common.FloatingOkButton
-import de.westnordost.streetcomplete.ui.common.NonPredictiveBackHandler
 import de.westnordost.streetcomplete.ui.common.bottom_sheet.BottomSheetFormScaffold
+import de.westnordost.streetcomplete.ui.common.bottom_sheet.DismissFormHandler
 import de.westnordost.streetcomplete.ui.common.dialogs.ConfirmDiscardDialog
 import de.westnordost.streetcomplete.ui.common.quest.OnMap
 import de.westnordost.streetcomplete.ui.ktx.toPx
@@ -65,7 +65,9 @@ fun MoveNodeForm(
 
     var confirmDiscard by remember { mutableStateOf(false) }
 
-    NonPredictiveBackHandler {
+    /* as on Android up to v63, a click on the map dismisses this form - the node is positioned by
+       moving the map under the crosshair, clicks are not part of that */
+    DismissFormHandler {
         if (mapPosition != node.position) {
             confirmDiscard = true
         } else {

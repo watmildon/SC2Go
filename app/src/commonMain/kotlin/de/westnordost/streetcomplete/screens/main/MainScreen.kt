@@ -460,7 +460,8 @@ fun MainScreen(
                 when (sheet.selection) {
                     null -> {}
                     is MainSheetSelection.EditHistory -> sheet.close()
-                    // forms react to clicks near the click position, e.g. to suggest a name
+                    /* a click next to an open form usually dismisses it; the forms that ask for
+                       a name pick up the name of what was clicked instead (see DismissFormHandler) */
                     else -> event.toMapClick()?.let { sheet.lastMapClick = it }
                 }
                 ClickResult.Consume

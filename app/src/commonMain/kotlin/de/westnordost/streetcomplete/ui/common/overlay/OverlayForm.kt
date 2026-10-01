@@ -38,8 +38,8 @@ import de.westnordost.streetcomplete.resources.*
 import de.westnordost.streetcomplete.ui.common.DropdownMenuItem
 import de.westnordost.streetcomplete.ui.common.FloatingOkButton
 import de.westnordost.streetcomplete.ui.common.MoreIcon
-import de.westnordost.streetcomplete.ui.common.NonPredictiveBackHandler
 import de.westnordost.streetcomplete.ui.common.bottom_sheet.BottomSheetFormScaffold
+import de.westnordost.streetcomplete.ui.common.bottom_sheet.DismissFormHandler
 import de.westnordost.streetcomplete.ui.common.dialogs.ConfirmDiscardDialog
 import de.westnordost.streetcomplete.ui.common.quest.AnswerItem
 import de.westnordost.streetcomplete.ui.common.quest.LocalElement
@@ -61,6 +61,9 @@ import org.koin.compose.koinInject
  *
  *  Floating in the lower end corner, an OK button for confirmation. [isComplete] should be true
  *  when the form is complete, while [hasChanges] should be true when any changes have been made.
+ *
+ *  A click on the map next to the form dismisses it, unless the form uses map clicks for something
+ *  itself - then it should set [consumesMapClicks].
  *  */
 @Composable
 fun OverlayForm(
@@ -77,11 +80,12 @@ fun OverlayForm(
     otherAnswers: @Composable () -> List<AnswerItem> = { emptyList() },
     contentPadding: PaddingValues = PaddingValues(horizontal = 24.dp, vertical = 12.dp),
     pinContent: @Composable (() -> Unit)? = null,
+    consumesMapClicks: Boolean = false,
     content: @Composable BoxScope.() -> Unit
 ) {
     var confirmDiscard by remember { mutableStateOf(false) }
 
-    NonPredictiveBackHandler {
+    DismissFormHandler(consumesMapClicks) {
         if (hasChanges) {
             confirmDiscard = true
         } else {

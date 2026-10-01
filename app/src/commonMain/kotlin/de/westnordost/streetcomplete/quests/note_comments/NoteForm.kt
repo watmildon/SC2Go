@@ -27,7 +27,7 @@ import androidx.compose.ui.unit.dp
 import de.westnordost.streetcomplete.data.osmtracks.Trackpoint
 import de.westnordost.streetcomplete.resources.*
 import de.westnordost.streetcomplete.screens.main.bottom_sheet.note.rememberTrackpointsPainter
-import de.westnordost.streetcomplete.ui.common.NonPredictiveBackHandler
+import de.westnordost.streetcomplete.ui.common.bottom_sheet.DismissFormHandler
 import de.westnordost.streetcomplete.ui.common.dialogs.ConfirmDiscardDialog
 import de.westnordost.streetcomplete.ui.util.photo.compressPhotoAndOverwrite
 import de.westnordost.streetcomplete.ui.util.photo.createOpenCameraSettings
@@ -85,7 +85,7 @@ fun NoteForm(
         onDismiss()
     }
 
-    NonPredictiveBackHandler {
+    DismissFormHandler {
         if (hasChanges) {
             confirmDiscard = true
         } else {

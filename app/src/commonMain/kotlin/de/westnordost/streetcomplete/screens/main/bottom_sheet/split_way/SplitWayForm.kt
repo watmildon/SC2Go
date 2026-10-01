@@ -34,8 +34,8 @@ import de.westnordost.streetcomplete.data.osm.mapdata.Way
 import de.westnordost.streetcomplete.resources.*
 import de.westnordost.streetcomplete.screens.main.bottom_sheet.scissorsPainter
 import de.westnordost.streetcomplete.ui.common.FloatingOkButton
-import de.westnordost.streetcomplete.ui.common.NonPredictiveBackHandler
 import de.westnordost.streetcomplete.ui.common.bottom_sheet.BottomSheetFormScaffold
+import de.westnordost.streetcomplete.ui.common.bottom_sheet.DismissFormHandler
 import de.westnordost.streetcomplete.ui.common.dialogs.AreYouSureDialog
 import de.westnordost.streetcomplete.ui.common.dialogs.ConfirmDiscardDialog
 import de.westnordost.streetcomplete.ui.common.quest.LocalMapMarkersCallback
@@ -116,7 +116,11 @@ fun SplitWayForm(
         )
     }
 
-    NonPredictiveBackHandler {
+    /* the whole map is this form's work area - the crosshair is aimed by moving the map about, and
+       up to v63, SplitWayFragment.onClickMapAt swallowed clicks on it (it cut the way there). So a
+       click next to the form does not dismiss it; that is what the cancel button and the back
+       gesture are for. */
+    DismissFormHandler(consumesMapClicks = true) {
         if (hasChanges) {
             confirmDiscard = true
         } else {
